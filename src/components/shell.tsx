@@ -1,0 +1,278 @@
+import { Link, useRouter, useRouterState } from '@tanstack/react-router'
+import {
+  ArrowsLeftRight,
+  Cube,
+  House,
+  Lightning,
+  Moon,
+  Sun,
+} from '@phosphor-icons/react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
+
+const THEME_KEY = 'ethpool-theme'
+
+const HostContext = createContext<{
+  host: string
+  setHost: (host: string) => void
+}>({
+  host: 'eth.drpc.org',
+  setHost: () => {},
+})
+
+export function useReportHost(host: string | undefined) {
+  const { setHost } = useContext(HostContext)
+  useEffect(() => {
+    if (host) setHost(host)
+  }, [host, setHost])
+}
+
+export function useAutoRefresh(ms = 20_000) {
+  const router = useRouter()
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (!document.hidden) void router.invalidate()
+    }, ms)
+    return () => window.clearInterval(id)
+  }, [router, ms])
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const [host, setHost] = useState('eth.drpc.org')
+  const path = useRouterState({ select: (state) => state.location.pathname })
+  const hash = useRouterState({ select: (state) => state.location.hash })
+  const txHash = path.startsWith('/tx/') ? path.slice(4) : null
+
+  return (
+    <HostContext.Provider value={{ host, setHost }}>
+      <div className="flex min-h-screen bg-muted text-foreground">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 border-r bg-sidebar px-3 py-5 lg:flex">
+          <Brand />
+          <p className="px-2.5 pt-2 text-[11px] font-medium tracking-[0.06em] text-muted-foreground">
+            MONITOR
+          </p>
+          <NavLink
+            to="/"
+            active={path === '/' && hash !== 'fees'}
+            icon={House}
+            label="Overview"
+          />
+          <NavLink
+            to="/block/$blockId"
+            params={{ blockId: 'latest' }}
+            active={path.startsWith('/block')}
+            icon={Cube}
+            label="Blocks"
+          />
+          {txHash ? (
+            <NavLink
+              to="/tx/$hash"
+              params={{ hash: txHash }}
+              active
+              icon={ArrowsLeftRight}
+              label="Transaction flow"
+            />
+          ) : (
+            <NavLink
+              to="/block/$blockId"
+              params={{ blockId: 'latest' }}
+              active={false}
+              icon={ArrowsLeftRight}
+              label="Transaction flow"
+            />
+          )}
+          <NavLink
+            to="/"
+            hash="fees"
+            active={path === '/' && hash === 'fees'}
+            icon={Lightning}
+            label="Fees"
+          />
+          <div className="flex-1" />
+          <div className="px-2.5 pt-3 text-xs">
+            <p className="text-muted-foreground">Public RPC</p>
+            <p className="font-mono text-foreground">{host}</p>
+          </div>
+        </aside>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center gap-3 border-b bg-sidebar px-4 py-3 lg:hidden">
+            <Brand compact />
+            <nav className="flex gap-1 overflow-x-auto text-sm">
+              <Link to="/" className="rounded-lg px-2 py-1">
+                Overview
+              </Link>
+              <Link
+                to="/block/$blockId"
+                params={{ blockId: 'latest' }}
+                className="rounded-lg px-2 py-1"
+              >
+                Blocks
+              </Link>
+              <Link to="/" hash="fees" className="rounded-lg px-2 py-1">
+                Fees
+              </Link>
+            </nav>
+          </div>
+          <div className="flex-1 px-4 py-6 lg:px-6">{children}</div>
+        </div>
+      </div>
+    </HostContext.Provider>
+  )
+}
+
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2.5 px-2 pb-4',
+        compact && 'px-0 pb-0',
+      )}
+    >
+      <div className="flex size-8 items-center justify-center rounded-lg bg-primary font-heading text-base font-bold text-primary-foreground">
+        E
+      </div>
+      {compact ? null : (
+        <div>
+          <p className="font-heading text-base font-medium">ETHPOOL</p>
+          <p className="text-xs text-muted-foreground">Ethereum mainnet</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NavLink({
+  active,
+  icon: Icon,
+  label,
+  ...link
+}: {
+  active: boolean
+  icon: typeof House
+  label: string
+  to: '/' | '/block/$blockId' | '/tx/$hash'
+  params?: { blockId: string } | { hash: string }
+  hash?: string
+}) {
+  return (
+    <Link
+      {...link}
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm',
+        active
+          ? 'bg-muted font-medium text-foreground'
+          : 'text-muted-foreground',
+      )}
+    >
+      <Icon size={16} />
+      {label}
+    </Link>
+  )
+}
+
+export function PageHeader({
+  title,
+  subtitle,
+  updatedAt,
+  live,
+  problem = 'offline',
+  onRefresh,
+}: {
+  title: string
+  subtitle: string
+  updatedAt: number
+  live: boolean
+  problem?: 'offline' | 'other'
+  onRefresh: () => void
+}) {
+  const [dark, setDark] = useState(false)
+  const refreshing = useRouterState({
+    select: (state) => state.status === 'pending',
+  })
+
+  useEffect(() => {
+    setDark(document.documentElement.classList.contains('dark'))
+  }, [])
+
+  function toggleTheme() {
+    const next = !document.documentElement.classList.contains('dark')
+    document.documentElement.classList.toggle('dark', next)
+    localStorage.setItem(THEME_KEY, next ? 'dark' : 'light')
+    setDark(next)
+  }
+
+  const clock = new Date(updatedAt)
+  const stamp = `${String(clock.getUTCHours()).padStart(2, '0')}:${String(clock.getUTCMinutes()).padStart(2, '0')}:${String(clock.getUTCSeconds()).padStart(2, '0')} UTC`
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 className="font-heading text-[28px] font-medium leading-none">
+          {title}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-full border bg-card py-1 pr-2.5 pl-2 text-xs font-medium">
+          <span
+            className={cn(
+              'size-1.5 rounded-full',
+              live ? 'bg-chart-2' : 'bg-destructive',
+            )}
+          />
+          {live ? 'Live' : problem === 'offline' ? 'RPC error' : 'Error'}
+        </span>
+        <span className="text-[13px] text-muted-foreground">
+          {live ? 'Updated' : 'Last try'} {stamp}
+        </span>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="inline-flex size-9 items-center justify-center rounded-lg border bg-card"
+        >
+          {dark ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="rounded-lg border bg-card px-3 py-2 text-sm font-medium"
+        >
+          {refreshing ? 'Refreshing' : 'Refresh'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function ErrorBanner({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry: () => void
+}) {
+  const offline = message === 'Could not reach Ethereum'
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive bg-fee-high-bg px-4 py-3">
+      <div>
+        <p className="text-sm font-medium text-fee-high">
+          {offline ? 'Could not reach Ethereum' : message}
+        </p>
+        {offline ? (
+          <p className="text-sm text-muted-foreground">
+            Check the public RPC, then try again.
+          </p>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-lg border bg-card px-3 py-2 text-sm font-medium"
+      >
+        Retry
+      </button>
+    </div>
+  )
+}

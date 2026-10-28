@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BlockBlockIdRouteImport } from './routes/block.$blockId'
+import { Route as TxHashRouteImport } from './routes/tx.$hash'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlockBlockIdRoute = BlockBlockIdRouteImport.update({
+  id: '/block/$blockId',
+  path: '/block/$blockId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TxHashRoute = TxHashRouteImport.update({
+  id: '/tx/$hash',
+  path: '/tx/$hash',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/block/$blockId': typeof BlockBlockIdRoute
+  '/tx/$hash': typeof TxHashRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/block/$blockId': typeof BlockBlockIdRoute
+  '/tx/$hash': typeof TxHashRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/block/$blockId': typeof BlockBlockIdRoute
+  '/tx/$hash': typeof TxHashRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/block/$blockId' | '/tx/$hash'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/block/$blockId' | '/tx/$hash'
+  id: '__root__' | '/' | '/block/$blockId' | '/tx/$hash'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BlockBlockIdRoute: typeof BlockBlockIdRoute
+  TxHashRoute: typeof TxHashRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/block/$blockId': {
+      id: '/block/$blockId'
+      path: '/block/$blockId'
+      fullPath: '/block/$blockId'
+      preLoaderRoute: typeof BlockBlockIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tx/$hash': {
+      id: '/tx/$hash'
+      path: '/tx/$hash'
+      fullPath: '/tx/$hash'
+      preLoaderRoute: typeof TxHashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BlockBlockIdRoute: BlockBlockIdRoute,
+  TxHashRoute: TxHashRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

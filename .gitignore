@@ -8,6 +8,7 @@ dist-ssr
 .tanstack
 .wrangler
 .output
+storybook-static
 .vinxi
 __unconfig*
 todos.json
