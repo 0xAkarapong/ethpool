@@ -34,7 +34,25 @@ const txRoute = createRoute({
   component: () => null,
 })
 
-const routeTree = rootRoute.addChildren([indexRoute, blockRoute, txRoute])
+const addressRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/address/$address',
+  component: () => null,
+})
+
+const traceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/trace',
+  component: () => null,
+})
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  blockRoute,
+  txRoute,
+  addressRoute,
+  traceRoute,
+])
 
 export function WithRouter({
   children,

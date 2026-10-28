@@ -51,11 +51,11 @@ export function TxFlow({
               </>
             ) : null}
           </p>
-          <div className="relative rounded-[10px] border bg-card p-4 lg:p-6">
+          <div className="relative overflow-hidden rounded-[10px] border bg-card p-4 lg:p-6">
             <svg
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-6 hidden lg:block"
+              className="pointer-events-none absolute inset-6 hidden h-[calc(100%-3rem)] w-[calc(100%-3rem)] lg:block"
               aria-hidden
             >
               <FlowPath
