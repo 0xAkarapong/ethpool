@@ -1,4 +1,3 @@
-import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import type { OverviewData, OverviewResult } from '@/lib/chain'
 import {
@@ -9,6 +8,7 @@ import {
   formatNumber,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { BlockChain } from './block-chain'
 import { ErrorBanner, PageHeader } from './shell'
 
 const FEE_TEXT = {
@@ -176,49 +176,16 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
 
       <section className="rounded-[10px] border bg-card p-5">
         <h2 className="text-base font-medium">Recent blocks</h2>
-        <p className="text-[13px] text-muted-foreground">Newest first</p>
-        <div className="mt-4 overflow-x-auto">
-          <div className="grid min-w-[640px] grid-cols-[1.3fr_0.7fr_1.6fr_0.8fr_0.5fr] px-2 pb-2 text-xs text-muted-foreground">
-            <span>Block</span>
-            <span>Age</span>
-            <span>How full</span>
-            <span className="text-right">Price</span>
-            <span className="text-right">Payments</span>
-          </div>
-          {data.blocks.map((block) => {
-            const percent = Math.round((block.gasUsed / block.gasLimit) * 100)
-            const level = feeLevel(block.baseFeeGwei)
-            return (
-              <Link
-                key={block.hash}
-                to="/block/$blockId"
-                params={{ blockId: String(block.number) }}
-                className="grid min-w-[640px] grid-cols-[1.3fr_0.7fr_1.6fr_0.8fr_0.5fr] items-center border-t px-2 py-3 text-sm"
-              >
-                <span className="font-medium">
-                  #{formatNumber(block.number)}
-                </span>
-                <span className="text-muted-foreground">
-                  {formatAge(now, block.timestamp)}
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-[120px] rounded-full bg-muted">
-                    <span
-                      className="block h-1.5 rounded-full bg-foreground/70"
-                      style={{ width: `${Math.min(100, percent)}%` }}
-                    />
-                  </span>
-                  <span className="text-muted-foreground">{percent}%</span>
-                </span>
-                <span className={cn('text-right font-medium', FEE_TEXT[level])}>
-                  {formatGwei(block.baseFeeGwei)}
-                </span>
-                <span className="text-right">
-                  {formatNumber(block.txCount)}
-                </span>
-              </Link>
-            )
-          })}
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          Newest on the left. Open a block to see its payments.
+        </p>
+        <div className="mt-4">
+          <BlockChain
+            blocks={data.blocks}
+            active={data.latest.number}
+            pending={data.pending}
+            updatedAt={data.updatedAt}
+          />
         </div>
       </section>
     </>

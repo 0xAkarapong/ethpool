@@ -1,5 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { addressName, formatEth, formatWeiAsGwei } from './format'
+import { addressName, formatEth, formatWeiAsGwei, shortAddress } from './format'
 import {
   classifyQuery,
   normalizeAddress,
@@ -7,6 +7,15 @@ import {
   type Hop,
   type TransferRow,
 } from './trace'
+import {
+  formatTokenAmount,
+  readDecimals,
+  readSymbol,
+  readTokenMoves,
+  TOKEN_MOVE_CAP,
+  type TokenLog,
+  type TokenMove,
+} from './tokens'
 
 const ENDPOINTS = [
   'https://eth.drpc.org',
@@ -80,6 +89,7 @@ export type BlockResult =
       host: string
       updatedAt: number
       block: BlockSummary
+      nearby: Array<BlockSummary>
       txs: Array<TxCell>
     }
   | { ok: false; host: string; updatedAt: number; message: string }
@@ -105,6 +115,8 @@ export type TxFlowResult =
       maxGwei: string
       priorityGwei: string
       kind: string
+      tokens: Array<TokenMove>
+      tokenMore: number
     }
   | { ok: false; host: string; updatedAt: number; message: string }
 
@@ -279,6 +291,7 @@ async function loadBlock(blockId: string): Promise<BlockResult> {
   const summary = asBlock(results[0])
   const block = asFullBlock(results[0])
   if (!summary || !block) throw new Error('Block not found')
+  const nearbyPromise = loadNearby(summary.number)
 
   let receipts = new Map<string, RpcReceipt>()
   const receiptCall = {
@@ -320,7 +333,35 @@ async function loadBlock(blockId: string): Promise<BlockResult> {
     }
   })
 
-  return { ok: true, host, updatedAt: Date.now(), block: summary, txs }
+  return {
+    ok: true,
+    host,
+    updatedAt: Date.now(),
+    block: summary,
+    nearby: await nearbyPromise,
+    txs,
+  }
+}
+
+async function loadNearby(number: number): Promise<Array<BlockSummary>> {
+  const calls = Array.from({ length: 8 }, (_, index) => ({
+    method: 'eth_getBlockByNumber',
+    params: [hexOf(Math.max(0, number - index)), false],
+  }))
+  try {
+    const result = await callFirst(calls)
+    const seen = new Set<number>()
+    const nearby: Array<BlockSummary> = []
+    for (const entry of result.results) {
+      const block = asBlock(entry)
+      if (!block || seen.has(block.number)) continue
+      seen.add(block.number)
+      nearby.push(block)
+    }
+    return nearby
+  } catch {
+    return []
+  }
 }
 
 async function loadTx(hash: string): Promise<TxFlowResult> {
@@ -354,6 +395,10 @@ async function loadTx(hash: string): Promise<TxFlowResult> {
   const burned = gasUsed * baseFee
   const tip = fee > burned ? fee - burned : 0n
   const value = BigInt(tx.value)
+  const described = await describeTokens(
+    url,
+    readTokenMoves(receiptLogs(results[1])),
+  )
 
   return {
     ok: true,
@@ -380,7 +425,95 @@ async function loadTx(hash: string): Promise<TxFlowResult> {
       ),
     ),
     kind: txKind(tx.type),
+    tokens: described.tokens,
+    tokenMore: described.tokenMore,
   }
+}
+
+const SYMBOL_CALL = '0x95d89b41'
+const DECIMALS_CALL = '0x313ce567'
+
+async function describeTokens(
+  url: string,
+  moves: ReturnType<typeof readTokenMoves>,
+): Promise<{ tokens: Array<TokenMove>; tokenMore: number }> {
+  const shown = moves.slice(0, TOKEN_MOVE_CAP)
+  if (shown.length === 0) return { tokens: [], tokenMore: 0 }
+  const contracts = [...new Set(shown.map((move) => move.token))]
+  const meta = new Map<string, { symbol: string; decimals: number | null }>()
+  try {
+    await mapPool(contracts, 4, async (token) => {
+      const [symbolWord, decimalsWord] = await Promise.all([
+        callMaybe(url, {
+          method: 'eth_call',
+          params: [{ to: token, data: SYMBOL_CALL }, 'latest'],
+        }),
+        callMaybe(url, {
+          method: 'eth_call',
+          params: [{ to: token, data: DECIMALS_CALL }, 'latest'],
+        }),
+      ])
+      meta.set(token, {
+        symbol: readSymbol(symbolWord) ?? shortAddress(token),
+        decimals: readDecimals(decimalsWord),
+      })
+    })
+  } catch {
+    meta.clear()
+  }
+  return {
+    tokenMore: Math.max(0, moves.length - shown.length),
+    tokens: shown.map((move) => {
+      const info = meta.get(move.token)
+      const symbol = info?.symbol ?? shortAddress(move.token)
+      if (move.tokenId !== null) {
+        return {
+          token: move.token,
+          symbol,
+          from: move.from,
+          to: move.to,
+          amount: `#${move.tokenId}`,
+        }
+      }
+      return {
+        token: move.token,
+        symbol,
+        from: move.from,
+        to: move.to,
+        amount:
+          info?.decimals == null
+            ? `${move.raw.toString()} units`
+            : formatTokenAmount(move.raw, info.decimals),
+      }
+    }),
+  }
+}
+
+async function callMaybe(url: string, call: Call): Promise<unknown | null> {
+  try {
+    return await callOne(url, call, AbortSignal.timeout(ATTEMPT_MS))
+  } catch {
+    return null
+  }
+}
+
+function receiptLogs(value: unknown): Array<TokenLog> {
+  if (!isRecord(value) || !Array.isArray(value.logs)) return []
+  const logs: Array<TokenLog> = []
+  for (const entry of value.logs) {
+    if (!isRecord(entry) || typeof entry.address !== 'string') continue
+    const topics = Array.isArray(entry.topics)
+      ? entry.topics.filter(
+          (topic): topic is string => typeof topic === 'string',
+        )
+      : []
+    logs.push({
+      address: entry.address,
+      topics,
+      data: typeof entry.data === 'string' ? entry.data : '0x',
+    })
+  }
+  return logs
 }
 
 // JSON-RPC cannot list an address's transfers. This public explorer API needs no key.

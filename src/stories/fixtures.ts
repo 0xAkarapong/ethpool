@@ -105,6 +105,7 @@ export const blockView: BlockResult = {
   host: 'eth.drpc.org',
   updatedAt,
   block: block(0),
+  nearby: rows.map((_, index) => block(index)),
   txs: mapCells(),
 }
 
@@ -128,4 +129,14 @@ export const txFlow: TxFlowResult = {
   maxGwei: '48.00',
   priorityGwei: '24.20',
   kind: 'EIP-1559',
+  tokens: [
+    {
+      token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      symbol: 'USDC',
+      from: '0x91c4a8e2b17c09d4f0aa21e8c3b77e2a1d04c91c',
+      to: '0x3fc91a3afd70395cd496c647d5a6cc9d4b2ae7',
+      amount: '1,250',
+    },
+  ],
+  tokenMore: 0,
 }
