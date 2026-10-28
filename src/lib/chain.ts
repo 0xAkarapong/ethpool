@@ -5,6 +5,7 @@ const ENDPOINTS = [
   'https://eth.drpc.org',
   'https://ethereum-rpc.publicnode.com',
   'https://1rpc.io/eth',
+  'https://rpc.flashbots.net',
 ]
 
 type RpcTx = {
@@ -52,8 +53,7 @@ export type OverviewData = {
 }
 
 export type OverviewResult =
-  | OverviewData
-  | { ok: false; host: string; updatedAt: number; message: string }
+  OverviewData | { ok: false; host: string; updatedAt: number; message: string }
 
 export type TxCell = {
   hash: string
@@ -99,18 +99,21 @@ export type TxFlowResult =
     }
   | { ok: false; host: string; updatedAt: number; message: string }
 
-export const getOverview = createServerFn({ method: 'GET' }).handler(async () => {
-  try {
-    return await loadOverview()
-  } catch (error) {
-    return fail(error)
-  }
-})
+export const getOverview = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    try {
+      return await loadOverview()
+    } catch (error) {
+      return fail(error)
+    }
+  },
+)
 
 export const getBlockView = createServerFn({ method: 'GET' })
   .validator((blockId: string) => blockId)
   .handler(async ({ data }): Promise<BlockResult> => {
-    if (data !== 'latest' && !/^\d{1,12}$/.test(data)) return fail(new Error('Invalid block'))
+    if (data !== 'latest' && !/^\d{1,12}$/.test(data))
+      return fail(new Error('Invalid block'))
     try {
       return await loadBlock(data)
     } catch (error) {
@@ -121,7 +124,8 @@ export const getBlockView = createServerFn({ method: 'GET' })
 export const getTxFlow = createServerFn({ method: 'GET' })
   .validator((hash: string) => hash)
   .handler(async ({ data }): Promise<TxFlowResult> => {
-    if (!/^0x[0-9a-fA-F]{64}$/.test(data)) return fail(new Error('Invalid transaction'))
+    if (!/^0x[0-9a-fA-F]{64}$/.test(data))
+      return fail(new Error('Invalid transaction'))
     try {
       return await loadTx(data)
     } catch (error) {
@@ -129,8 +133,14 @@ export const getTxFlow = createServerFn({ method: 'GET' })
     }
   })
 
-function fail(error: unknown): { ok: false; host: string; updatedAt: number; message: string } {
-  const message = error instanceof Error ? error.message : 'Could not reach Ethereum'
+function fail(error: unknown): {
+  ok: false
+  host: string
+  updatedAt: number
+  message: string
+} {
+  const message =
+    error instanceof Error ? error.message : 'Could not reach Ethereum'
   const reachable = /could not reach|timeout|fetch|network/i.test(message)
   return {
     ok: false,
@@ -140,7 +150,7 @@ function fail(error: unknown): { ok: false; host: string; updatedAt: number; mes
   }
 }
 
-async function loadOverview(): Promise<OverviewData> {
+export async function loadOverview(): Promise<OverviewData> {
   const { results } = await callFirst([
     { method: 'eth_feeHistory', params: ['0x28', 'latest', [10, 50, 90]] },
     { method: 'eth_blockNumber', params: [] },
@@ -159,7 +169,9 @@ async function loadOverview(): Promise<OverviewData> {
   if (blocks.length === 0) throw new Error('Latest block was empty')
 
   const included = history.baseFeePerGas.slice(0, -1).map(hexToGwei)
-  const nextBase = hexToGwei(history.baseFeePerGas[history.baseFeePerGas.length - 1])
+  const nextBase = hexToGwei(
+    history.baseFeePerGas[history.baseFeePerGas.length - 1],
+  )
   const tips = history.reward?.[history.reward.length - 1] ?? []
   const tip = (index: number) => (tips[index] ? hexToGwei(tips[index]) : 0)
 
@@ -168,7 +180,8 @@ async function loadOverview(): Promise<OverviewData> {
     const count = await callFirst([
       { method: 'eth_getBlockTransactionCountByNumber', params: ['pending'] },
     ])
-    if (typeof count.results[0] === 'string') pending = hexToNumber(count.results[0])
+    if (typeof count.results[0] === 'string')
+      pending = hexToNumber(count.results[0])
   } catch {
     // shortcut: public RPCs often hide the mempool, show an empty pending count until one publishes it
     pending = null
@@ -201,13 +214,25 @@ async function loadBlock(blockId: string): Promise<BlockResult> {
   if (!summary || !block) throw new Error('Block not found')
 
   let receipts = new Map<string, RpcReceipt>()
+  const receiptCall = {
+    method: 'eth_getBlockReceipts',
+    params: [block.hash],
+  }
   try {
-    const receiptResult = await callAt(url, [
-      { method: 'eth_getBlockReceipts', params: [block.hash] },
-    ])
+    const receiptResult = await callAt(url, [receiptCall])
     receipts = receiptMap(receiptResult.results[0])
   } catch {
     receipts = new Map()
+  }
+  // 1rpc rejects eth_getBlockReceipts. Without receipts every cell uses the
+  // gas limit, so one high-cap transaction fills the map.
+  if (receipts.size === 0 && block.transactions.length > 0) {
+    try {
+      const receiptResult = await callFirst([receiptCall])
+      receipts = receiptMap(receiptResult.results[0])
+    } catch {
+      receipts = new Map()
+    }
   }
 
   const baseFee = block.baseFeePerGas ? BigInt(block.baseFeePerGas) : 0n
@@ -240,7 +265,9 @@ async function loadTx(hash: string): Promise<TxFlowResult> {
   const receipt = asReceipt(results[1])
   if (!tx || !receipt) throw new Error('Transaction not found')
 
-  const blockNumber = receipt.blockNumber ? hexToNumber(receipt.blockNumber) : null
+  const blockNumber = receipt.blockNumber
+    ? hexToNumber(receipt.blockNumber)
+    : null
   let timestamp: number | null = null
   let baseFee = 0n
   if (blockNumber !== null) {
@@ -280,7 +307,10 @@ async function loadTx(hash: string): Promise<TxFlowResult> {
     effectiveGwei: formatWeiAsGwei(effective),
     maxGwei: formatWeiAsGwei(BigInt(tx.maxFeePerGas ?? tx.gasPrice ?? '0x0')),
     priorityGwei: formatWeiAsGwei(
-      BigInt(tx.maxPriorityFeePerGas ?? (effective > baseFee ? effective - baseFee : 0n)),
+      BigInt(
+        tx.maxPriorityFeePerGas ??
+          (effective > baseFee ? effective - baseFee : 0n),
+      ),
     ),
     kind: txKind(tx.type),
   }
@@ -306,42 +336,90 @@ type Call = { method: string; params: Array<unknown> }
 
 const quietUntil = new Map<string, number>()
 
+function isUnreachable(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? `${error.message} ${'cause' in error ? String(error.cause) : ''}`
+      : ''
+  return /could not reach|fetch|timeout|network|econnreset|abort|socket hang up|too many requests|rate limit/i.test(
+    message,
+  )
+}
+
+// One hung public RPC must not hold the page. Bun closes a dev request that
+// sends no bytes for 10s, which drops the block map before it renders.
+const ATTEMPT_MS = 4_000
+
 async function callFirst(calls: Array<Call>) {
-  let last: unknown
   const now = Date.now()
   const open = ENDPOINTS.filter((url) => (quietUntil.get(url) ?? 0) < now)
-  for (const url of open.length > 0 ? open : ENDPOINTS) {
-    try {
-      return await callAt(url, calls)
-    } catch (error) {
-      last = error
-      if (isUnreachable(error)) quietUntil.set(url, Date.now() + 20_000)
-    }
+  const urls = open.length > 0 ? open : ENDPOINTS
+  const controllers = urls.map(() => new AbortController())
+  const timer = setTimeout(() => {
+    for (const controller of controllers) controller.abort()
+  }, ATTEMPT_MS)
+  const attempts = urls.map((url, index) =>
+    callAt(url, calls, controllers[index].signal).then(
+      (result) => {
+        for (const [other, controller] of controllers.entries()) {
+          if (other !== index) controller.abort()
+        }
+        return result
+      },
+      (error: unknown) => {
+        // An abort we issued means another host already won, or the 4s cap hit.
+        if (!controllers[index].signal.aborted && isUnreachable(error)) {
+          quietUntil.set(url, Date.now() + 20_000)
+        }
+        throw error
+      },
+    ),
+  )
+
+  try {
+    return await Promise.any(attempts)
+  } catch (error) {
+    const list = error instanceof AggregateError ? error.errors : [error]
+    const last = list.find((entry) => entry instanceof Error)
+    throw last instanceof Error ? last : new Error('Could not reach Ethereum')
+  } finally {
+    clearTimeout(timer)
+    for (const attempt of attempts) attempt.catch(() => {})
   }
-  throw last instanceof Error ? last : new Error('Could not reach Ethereum')
 }
 
-function isUnreachable(error: unknown): boolean {
-  const message = error instanceof Error ? `${error.message} ${'cause' in error ? String(error.cause) : ''}` : ''
-  return /could not reach|fetch|timeout|network|econnreset|too many requests|rate limit/i.test(message)
-}
-
-async function callAt(url: string, calls: Array<Call>) {
-  const results = await mapPool(calls, 3, (call) => callOne(url, call))
+async function callAt(
+  url: string,
+  calls: Array<Call>,
+  signal = AbortSignal.timeout(ATTEMPT_MS),
+) {
+  const results = await mapPool(calls, 3, (call) => callOne(url, call, signal))
   return { url, host: new URL(url).host, results }
 }
 
-async function callOne(url: string, call: Call): Promise<unknown> {
+async function callOne(
+  url: string,
+  call: Call,
+  signal: AbortSignal,
+): Promise<unknown> {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: call.method, params: call.params }),
-    signal: AbortSignal.timeout(12_000),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: call.method,
+      params: call.params,
+    }),
+    signal,
   })
   const body: unknown = await response.json().catch(() => null)
   if (!isRecord(body)) throw new Error('Could not reach Ethereum')
   if (body.error) {
-    const message = isRecord(body.error) && typeof body.error.message === 'string' ? body.error.message : 'RPC error'
+    const message =
+      isRecord(body.error) && typeof body.error.message === 'string'
+        ? body.error.message
+        : 'RPC error'
     throw new Error(message)
   }
   if (!response.ok) throw new Error('Could not reach Ethereum')
@@ -368,7 +446,11 @@ async function mapPool<T, TResult>(
 }
 
 function asFeeHistory(value: unknown) {
-  if (!isRecord(value) || !Array.isArray(value.baseFeePerGas) || value.baseFeePerGas.length < 2) {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.baseFeePerGas) ||
+    value.baseFeePerGas.length < 2
+  ) {
     throw new Error('Fee history was missing')
   }
   const baseFeePerGas = value.baseFeePerGas.map(asHex)
@@ -379,18 +461,32 @@ function asFeeHistory(value: unknown) {
 }
 
 function asBlock(value: unknown): BlockSummary | null {
-  if (!isRecord(value) || typeof value.number !== 'string' || typeof value.hash !== 'string') return null
-  const txCount = Array.isArray(value.transactions) ? value.transactions.length : 0
-  const gasLimit = typeof value.gasLimit === 'string' ? hexToNumber(value.gasLimit) : 1
+  if (
+    !isRecord(value) ||
+    typeof value.number !== 'string' ||
+    typeof value.hash !== 'string'
+  )
+    return null
+  const txCount = Array.isArray(value.transactions)
+    ? value.transactions.length
+    : 0
+  const gasLimit =
+    typeof value.gasLimit === 'string' ? hexToNumber(value.gasLimit) : 1
   return {
     number: hexToNumber(value.number),
     hash: value.hash,
-    parentHash: typeof value.parentHash === 'string' ? value.parentHash : value.hash,
-    timestamp: typeof value.timestamp === 'string' ? hexToNumber(value.timestamp) : 0,
+    parentHash:
+      typeof value.parentHash === 'string' ? value.parentHash : value.hash,
+    timestamp:
+      typeof value.timestamp === 'string' ? hexToNumber(value.timestamp) : 0,
     gasUsed: typeof value.gasUsed === 'string' ? hexToNumber(value.gasUsed) : 0,
     gasLimit: Math.max(1, gasLimit),
-    baseFeeGwei: typeof value.baseFeePerGas === 'string' ? hexToGwei(value.baseFeePerGas) : 0,
-    baseFeeWei: typeof value.baseFeePerGas === 'string' ? value.baseFeePerGas : '0x0',
+    baseFeeGwei:
+      typeof value.baseFeePerGas === 'string'
+        ? hexToGwei(value.baseFeePerGas)
+        : 0,
+    baseFeeWei:
+      typeof value.baseFeePerGas === 'string' ? value.baseFeePerGas : '0x0',
     txCount,
   }
 }
@@ -405,24 +501,38 @@ function asFullBlock(value: unknown): {
   baseFeePerGas?: string
   transactions: Array<RpcTx>
 } | null {
-  if (!isRecord(value) || typeof value.number !== 'string' || typeof value.hash !== 'string') return null
+  if (
+    !isRecord(value) ||
+    typeof value.number !== 'string' ||
+    typeof value.hash !== 'string'
+  )
+    return null
   if (!Array.isArray(value.transactions)) return null
-  const transactions = value.transactions.map(asTx).filter((tx): tx is RpcTx => tx !== null)
+  const transactions = value.transactions
+    .map(asTx)
+    .filter((tx): tx is RpcTx => tx !== null)
   return {
     number: value.number,
     hash: value.hash,
-    parentHash: typeof value.parentHash === 'string' ? value.parentHash : value.hash,
+    parentHash:
+      typeof value.parentHash === 'string' ? value.parentHash : value.hash,
     timestamp: typeof value.timestamp === 'string' ? value.timestamp : '0x0',
     gasUsed: typeof value.gasUsed === 'string' ? value.gasUsed : '0x0',
     gasLimit: typeof value.gasLimit === 'string' ? value.gasLimit : '0x1',
-    baseFeePerGas: typeof value.baseFeePerGas === 'string' ? value.baseFeePerGas : undefined,
+    baseFeePerGas:
+      typeof value.baseFeePerGas === 'string' ? value.baseFeePerGas : undefined,
     transactions,
   }
 }
 
 function asTx(value: unknown): RpcTx | null {
   if (typeof value === 'string') return null
-  if (!isRecord(value) || typeof value.hash !== 'string' || typeof value.from !== 'string') return null
+  if (
+    !isRecord(value) ||
+    typeof value.hash !== 'string' ||
+    typeof value.from !== 'string'
+  )
+    return null
   return {
     hash: value.hash,
     from: value.from,
@@ -430,21 +540,30 @@ function asTx(value: unknown): RpcTx | null {
     value: typeof value.value === 'string' ? value.value : '0x0',
     gas: typeof value.gas === 'string' ? value.gas : '0x0',
     gasPrice: typeof value.gasPrice === 'string' ? value.gasPrice : undefined,
-    maxFeePerGas: typeof value.maxFeePerGas === 'string' ? value.maxFeePerGas : undefined,
+    maxFeePerGas:
+      typeof value.maxFeePerGas === 'string' ? value.maxFeePerGas : undefined,
     maxPriorityFeePerGas:
-      typeof value.maxPriorityFeePerGas === 'string' ? value.maxPriorityFeePerGas : undefined,
+      typeof value.maxPriorityFeePerGas === 'string'
+        ? value.maxPriorityFeePerGas
+        : undefined,
     type: typeof value.type === 'string' ? value.type : undefined,
-    blockNumber: typeof value.blockNumber === 'string' ? value.blockNumber : null,
+    blockNumber:
+      typeof value.blockNumber === 'string' ? value.blockNumber : null,
   }
 }
 
 function asReceipt(value: unknown): RpcReceipt | null {
   if (!isRecord(value) || typeof value.gasUsed !== 'string') return null
   return {
-    transactionHash: typeof value.transactionHash === 'string' ? value.transactionHash : '',
+    transactionHash:
+      typeof value.transactionHash === 'string' ? value.transactionHash : '',
     gasUsed: value.gasUsed,
-    effectiveGasPrice: typeof value.effectiveGasPrice === 'string' ? value.effectiveGasPrice : undefined,
-    blockNumber: typeof value.blockNumber === 'string' ? value.blockNumber : undefined,
+    effectiveGasPrice:
+      typeof value.effectiveGasPrice === 'string'
+        ? value.effectiveGasPrice
+        : undefined,
+    blockNumber:
+      typeof value.blockNumber === 'string' ? value.blockNumber : undefined,
   }
 }
 
@@ -453,13 +572,15 @@ function receiptMap(value: unknown): Map<string, RpcReceipt> {
   if (!Array.isArray(value)) return map
   for (const entry of value) {
     const receipt = asReceipt(entry)
-    if (receipt?.transactionHash) map.set(receipt.transactionHash.toLowerCase(), receipt)
+    if (receipt?.transactionHash)
+      map.set(receipt.transactionHash.toLowerCase(), receipt)
   }
   return map
 }
 
 function asHex(value: unknown): string {
-  if (typeof value !== 'string' || !value.startsWith('0x')) throw new Error('Unexpected RPC value')
+  if (typeof value !== 'string' || !value.startsWith('0x'))
+    throw new Error('Unexpected RPC value')
   return value
 }
 
