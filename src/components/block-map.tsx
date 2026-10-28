@@ -2,10 +2,10 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { BlockResult, TxCell } from '@/lib/chain'
 import {
+  feeHeat,
   feeLevel,
   formatGwei,
   formatNumber,
-  heatColor,
   shortAddress,
 } from '@/lib/format'
 import { treemap } from '@/lib/treemap'
@@ -30,6 +30,7 @@ export function BlockMap({
     MAP_W,
     MAP_H,
   )
+  const tone = feeHeat(txs.map((tx) => tx.feeGwei))
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -60,12 +61,13 @@ export function BlockMap({
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="text-base font-medium">Transactions</h2>
               <p className="text-xs text-muted-foreground">
-                Area is gas. Color is effective fee.
+                Area is gas. Hotter color paid more in this block.
               </p>
             </div>
             <div className="relative mt-3 aspect-[788/520] w-full overflow-hidden rounded-lg bg-muted">
               {cells.map((cell) => {
                 const active = cell.hash === selected?.hash
+                const paint = tone(cell.feeGwei)
                 return (
                   <button
                     key={cell.hash}
@@ -73,22 +75,25 @@ export function BlockMap({
                     aria-label={`${shortAddress(cell.hash)} ${formatGwei(cell.feeGwei)} gwei`}
                     onClick={() => setPicked(cell.hash)}
                     className={cn(
-                      'absolute overflow-hidden border-0 p-0 text-left',
-                      active && 'z-10 outline outline-2 outline-white',
+                      'absolute overflow-hidden rounded-[3px] border-0 p-0 text-left outline-none',
+                      active && 'z-10',
                     )}
                     style={{
-                      left: `${(cell.x / MAP_W) * 100}%`,
-                      top: `${(cell.y / MAP_H) * 100}%`,
-                      width: `${(cell.w / MAP_W) * 100}%`,
-                      height: `${(cell.h / MAP_H) * 100}%`,
-                      background: heatColor(cell.feeGwei),
+                      left: `calc(${(cell.x / MAP_W) * 100}% + 1.5px)`,
+                      top: `calc(${(cell.y / MAP_H) * 100}% + 1.5px)`,
+                      width: `max(0px, calc(${(cell.w / MAP_W) * 100}% - 3px))`,
+                      height: `max(0px, calc(${(cell.h / MAP_H) * 100}% - 3px))`,
+                      background: paint.color,
                       boxShadow: active
-                        ? 'inset 0 0 0 1px rgba(0,0,0,0.45)'
+                        ? `inset 0 0 0 2px ${paint.ink}`
                         : undefined,
                     }}
                   >
-                    {cell.w > 46 && cell.h > 22 ? (
-                      <span className="px-1 text-[11px] font-medium text-white">
+                    {cell.w > 72 && cell.h > 28 ? (
+                      <span
+                        className="px-1.5 text-[11px] font-medium"
+                        style={{ color: paint.ink }}
+                      >
                         {formatGwei(cell.feeGwei)}
                       </span>
                     ) : null}

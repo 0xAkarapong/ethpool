@@ -36,7 +36,10 @@ export function formatEth(wei: bigint, digits = 4): string {
   const negative = wei < 0n
   const value = negative ? -wei : wei
   const whole = value / 10n ** 18n
-  const fraction = (value % 10n ** 18n).toString().padStart(18, '0').slice(0, digits)
+  const fraction = (value % 10n ** 18n)
+    .toString()
+    .padStart(18, '0')
+    .slice(0, digits)
   return `${negative ? '-' : ''}${whole.toString()}.${fraction}`
 }
 
@@ -70,27 +73,48 @@ export function shortAddress(address: string): string {
 export function axisMax(values: number[]): number {
   const peak = Math.max(1, ...values)
   const padded = peak * 1.15
-  const step = padded > 80 ? 20 : padded > 30 ? 10 : padded > 10 ? 5 : padded > 2 ? 1 : 0.5
+  const step =
+    padded > 80 ? 20 : padded > 30 ? 10 : padded > 10 ? 5 : padded > 2 ? 1 : 0.5
   return Math.ceil(padded / step) * step
 }
 
-export function heatColor(gwei: number): string {
-  if (gwei <= HEAT_STOPS[0][0]) return rgb(HEAT_STOPS[0][1])
-  const last = HEAT_STOPS[HEAT_STOPS.length - 1]
-  if (gwei >= last[0]) return rgb(last[1])
-  for (let i = 1; i < HEAT_STOPS.length; i++) {
-    const [end, color] = HEAT_STOPS[i]
-    const [start, previous] = HEAT_STOPS[i - 1]
-    if (gwei <= end) {
-      const t = (gwei - start) / (end - start)
-      return rgb([
-        mix(previous[0], color[0], t),
-        mix(previous[1], color[1], t),
-        mix(previous[2], color[2], t),
-      ])
-    }
+export type FeeTone = { color: string; ink: string }
+
+// Absolute stops assume multi-gwei fees. A quiet block is all under the first
+// stop, so color by where each fee sits among the others.
+export function feeHeat(values: Array<number>): (gwei: number) => FeeTone {
+  const sorted = values.filter((value) => value > 0).sort((a, b) => a - b)
+  const lo = sorted[Math.floor((sorted.length - 1) * 0.08)] ?? 1
+  const hi = sorted[Math.ceil((sorted.length - 1) * 0.92)] ?? lo
+  const span = Math.log(Math.max(hi, lo * 1.05)) - Math.log(lo)
+  return (gwei) => {
+    const t =
+      span < 0.25
+        ? 0.12
+        : clamp((Math.log(Math.max(gwei, lo)) - Math.log(lo)) / span, 0, 1)
+    const channels = heatChannels(t)
+    const light =
+      0.299 * channels[0] + 0.587 * channels[1] + 0.114 * channels[2] > 150
+    return { color: rgb(channels), ink: light ? '#1a1a1a' : '#fff' }
   }
-  return rgb(last[1])
+}
+
+function heatChannels(t: number): [number, number, number] {
+  const last = HEAT_STOPS.length - 1
+  const scaled = t * last
+  const index = Math.min(last - 1, Math.floor(scaled))
+  const local = scaled - index
+  const from = HEAT_STOPS[index][1]
+  const to = HEAT_STOPS[index + 1][1]
+  return [
+    mix(from[0], to[0], local),
+    mix(from[1], to[1], local),
+    mix(from[2], to[2], local),
+  ]
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
 }
 
 function mix(from: number, to: number, t: number): number {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   axisMax,
+  feeHeat,
   feeLevel,
   formatAge,
   formatEth,
@@ -36,5 +37,17 @@ describe('formatters', () => {
 
   test('picks a chart ceiling above the peak', () => {
     expect(axisMax([18.42, 27.15])).toBe(40)
+  })
+})
+
+describe('block heat', () => {
+  test('separates a cheap fee from a dear one in the same block', () => {
+    const tone = feeHeat([0.07, 0.08, 0.12, 0.2, 2.1])
+    expect(tone(0.07).color).not.toBe(tone(2.1).color)
+  })
+
+  test('stays one color when the block barely moves', () => {
+    const tone = feeHeat([0.07, 0.071, 0.072])
+    expect(tone(0.07).color).toBe(tone(0.072).color)
   })
 })
