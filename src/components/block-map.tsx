@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import type { BlockResult, TxCell } from '@/lib/chain'
 import {
   feeHeat,
@@ -40,8 +41,8 @@ export function BlockMap({
         }
         subtitle={
           result.ok
-            ? `${formatNumber(result.block.txCount)} transactions · base fee ${formatGwei(result.block.baseFeeGwei)} gwei`
-            : 'Transaction map'
+            ? `${formatNumber(result.block.txCount)} payments packed into this batch`
+            : 'What was inside this batch'
         }
         updatedAt={result.updatedAt}
         live={result.ok}
@@ -59,10 +60,23 @@ export function BlockMap({
         <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div className="rounded-[10px] border bg-card p-4">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-base font-medium">Transactions</h2>
-              <p className="text-xs text-muted-foreground">
-                Area is gas. Hotter color paid more in this block.
+              <h2 className="text-base font-medium">
+                Every payment in this batch
+              </h2>
+              <p className="text-right text-xs text-muted-foreground">
+                Bigger tile, more of the work. Greener paid less.
               </p>
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Lower fee</span>
+              <span
+                className="h-2 flex-1 rounded-full"
+                style={{
+                  background:
+                    'linear-gradient(90deg, rgb(11 107 69), rgb(224 161 0), rgb(225 29 48))',
+                }}
+              />
+              <span>Higher fee</span>
             </div>
             <div className="relative mt-3 aspect-[788/520] w-full overflow-hidden rounded-lg bg-muted">
               {cells.map((cell) => {
@@ -101,9 +115,15 @@ export function BlockMap({
                 )
               })}
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Parent {shortAddress(result.block.parentHash)}
-            </p>
+            {result.block.number > 0 ? (
+              <Link
+                to="/block/$blockId"
+                params={{ blockId: String(result.block.number - 1) }}
+                className="mt-3 inline-block text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Previous block
+              </Link>
+            ) : null}
           </div>
           {selected ? (
             <Detail tx={selected} baseFee={result.block.baseFeeGwei} />
@@ -118,7 +138,9 @@ function Detail({ tx, baseFee }: { tx: TxCell; baseFee: number }) {
   const level = feeLevel(tx.feeGwei)
   return (
     <aside className="rounded-[10px] border bg-card p-5">
-      <p className="text-[13px] font-medium text-muted-foreground">Selected</p>
+      <p className="text-[13px] font-medium text-muted-foreground">
+        Fee this payment paid
+      </p>
       <p
         className={cn(
           'mt-1 font-heading text-3xl font-medium',
@@ -133,34 +155,57 @@ function Detail({ tx, baseFee }: { tx: TxCell; baseFee: number }) {
         </span>
       </p>
       <dl className="mt-4 space-y-3 text-sm">
-        <Row label="Hash" value={shortAddress(tx.hash)} />
-        <Row label="From" value={shortAddress(tx.from)} />
-        <Row
-          label="To"
-          value={
-            tx.to ? (tx.toName ?? shortAddress(tx.to)) : 'Contract creation'
-          }
-        />
-        <Row label="Gas" value={formatNumber(tx.gas)} />
-        <Row label="Value" value={`${tx.valueEth} ETH`} />
-        <Row label="Block base fee" value={`${formatGwei(baseFee)} gwei`} />
+        <Row label="Payment">
+          <Link
+            to="/tx/$hash"
+            params={{ hash: tx.hash }}
+            className="underline-offset-2 hover:underline"
+          >
+            {shortAddress(tx.hash)}
+          </Link>
+        </Row>
+        <Row label="Sent by">
+          <Link
+            to="/address/$address"
+            params={{ address: tx.from }}
+            className="underline-offset-2 hover:underline"
+          >
+            {shortAddress(tx.from)}
+          </Link>
+        </Row>
+        <Row label="Received by">
+          {tx.to ? (
+            <Link
+              to="/address/$address"
+              params={{ address: tx.to }}
+              className="underline-offset-2 hover:underline"
+            >
+              {tx.toName ?? shortAddress(tx.to)}
+            </Link>
+          ) : (
+            'A new program'
+          )}
+        </Row>
+        <Row label="Gas used">{formatNumber(tx.gas)}</Row>
+        <Row label="Money sent">{`${tx.valueEth} ETH`}</Row>
+        <Row label="Minimum fee in this batch">{`${formatGwei(baseFee)} gwei`}</Row>
       </dl>
       <Link
         to="/tx/$hash"
         params={{ hash: tx.hash }}
         className="mt-5 inline-flex rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
       >
-        Open transaction flow
+        See where the money went
       </Link>
     </aside>
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-medium break-all">{value}</dd>
+      <dd className="font-medium break-all">{children}</dd>
     </div>
   )
 }

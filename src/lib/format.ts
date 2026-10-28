@@ -71,10 +71,23 @@ export function shortAddress(address: string): string {
 }
 
 export function axisMax(values: number[]): number {
-  const peak = Math.max(1, ...values)
+  const peak = Math.max(0, ...values)
+  if (peak === 0) return 1
   const padded = peak * 1.15
   const step =
-    padded > 80 ? 20 : padded > 30 ? 10 : padded > 10 ? 5 : padded > 2 ? 1 : 0.5
+    padded > 80
+      ? 20
+      : padded > 30
+        ? 10
+        : padded > 10
+          ? 5
+          : padded > 2
+            ? 1
+            : padded > 0.4
+              ? 0.5
+              : padded > 0.1
+                ? 0.05
+                : 0.01
   return Math.ceil(padded / step) * step
 }
 

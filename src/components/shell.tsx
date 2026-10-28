@@ -4,15 +4,7 @@ import {
   useRouter,
   useRouterState,
 } from '@tanstack/react-router'
-import {
-  ArrowsLeftRight,
-  Cube,
-  House,
-  Lightning,
-  MagnifyingGlass,
-  Moon,
-  Sun,
-} from '@phosphor-icons/react'
+import { Cube, House, MagnifyingGlass, Moon, Sun } from '@phosphor-icons/react'
 import {
   createContext,
   useCallback,
@@ -75,8 +67,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [host, setHost] = useState('eth.drpc.org')
   const [tracked, setTracked] = useState<Array<string>>([])
   const path = useRouterState({ select: (state) => state.location.pathname })
-  const hash = useRouterState({ select: (state) => state.location.hash })
-  const txHash = path.startsWith('/tx/') ? path.slice(4) : null
 
   useEffect(() => {
     setTracked(readTracked(localStorage))
@@ -100,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </p>
             <NavLink
               to="/"
-              active={path === '/' && hash !== 'fees'}
+              active={path === '/'}
               icon={House}
               label="Overview"
             />
@@ -110,30 +100,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               active={path.startsWith('/block')}
               icon={Cube}
               label="Blocks"
-            />
-            {txHash ? (
-              <NavLink
-                to="/tx/$hash"
-                params={{ hash: txHash }}
-                active
-                icon={ArrowsLeftRight}
-                label="Transaction flow"
-              />
-            ) : (
-              <NavLink
-                to="/block/$blockId"
-                params={{ blockId: 'latest' }}
-                active={false}
-                icon={ArrowsLeftRight}
-                label="Transaction flow"
-              />
-            )}
-            <NavLink
-              to="/"
-              hash="fees"
-              active={path === '/' && hash === 'fees'}
-              icon={Lightning}
-              label="Fees"
             />
             <p className="px-2.5 pt-4 text-[11px] font-medium tracking-[0.06em] text-muted-foreground">
               TRACE
@@ -178,9 +144,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className="rounded-lg px-2 py-1"
                 >
                   Blocks
-                </Link>
-                <Link to="/" hash="fees" className="rounded-lg px-2 py-1">
-                  Fees
                 </Link>
                 <Link to="/trace" className="rounded-lg px-2 py-1">
                   Addresses

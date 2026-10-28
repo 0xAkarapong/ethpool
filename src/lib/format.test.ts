@@ -37,6 +37,9 @@ describe('formatters', () => {
 
   test('picks a chart ceiling above the peak', () => {
     expect(axisMax([18.42, 27.15])).toBe(40)
+    const quiet = axisMax([0.08, 0.11])
+    expect(quiet).toBeGreaterThan(0.11)
+    expect(quiet).toBeLessThan(1)
   })
 })
 

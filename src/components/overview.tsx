@@ -7,7 +7,6 @@ import {
   formatAge,
   formatGwei,
   formatNumber,
-  usageLevel,
 } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { ErrorBanner, PageHeader } from './shell'
@@ -52,7 +51,7 @@ export function Overview({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <PageHeader
         title="Overview"
-        subtitle="Mempool and base fee on Ethereum mainnet"
+        subtitle="How much it costs to get a payment into the next batch"
         updatedAt={result.updatedAt}
         live={result.ok}
         problem={
@@ -83,17 +82,17 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
     <>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Base fee"
+          label="Price now"
           value={formatGwei(data.baseFeeGwei)}
           unit="gwei"
-          caption="Next block"
+          caption="What the next batch charges"
           tone={FEE_TEXT[baseLevel]}
         />
         <Metric
-          label="Suggested max"
+          label="A fair offer"
           value={formatGwei(data.suggested.medium)}
           unit="gwei"
-          caption="Medium, priority included"
+          caption="Enough for a normal payment"
           tone={FEE_TEXT[mediumLevel]}
         />
         <Metric
@@ -104,7 +103,7 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
         <Metric
           label="Pending"
           value={data.pending === null ? '—' : formatNumber(data.pending)}
-          unit={data.pending === null ? undefined : 'txs'}
+          unit={data.pending === null ? undefined : 'payments'}
           caption={
             data.pending === null
               ? 'This RPC does not publish the mempool size'
@@ -117,9 +116,10 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
         <div className="rounded-[10px] border bg-card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-base font-medium">Base fee</h2>
+              <h2 className="text-base font-medium">Price to get in</h2>
               <p className="text-[13px] text-muted-foreground">
-                Last 40 blocks, about one hour. Refreshes every 20 seconds.
+                Each bar is one batch of payments, oldest to newest. A taller
+                bar means people paid more to be included.
               </p>
             </div>
             <span
@@ -152,9 +152,9 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-            <Legend swatch="bg-fee-low-bar" label="Low  < 17 gwei" />
-            <Legend swatch="bg-fee-mid-bar" label="Medium  < 22" />
-            <Legend swatch="bg-fee-high-bar" label="High  22+" />
+            <Legend swatch="bg-fee-low-bar" label="Under 17 gwei" />
+            <Legend swatch="bg-fee-mid-bar" label="17–22 gwei" />
+            <Legend swatch="bg-fee-high-bar" label="Over 22 gwei" />
           </div>
         </div>
 
@@ -162,9 +162,9 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
           id="fees"
           className="scroll-mt-6 rounded-[10px] border bg-card p-5"
         >
-          <h2 className="text-base font-medium">Suggested max fee</h2>
+          <h2 className="text-base font-medium">What to offer</h2>
           <p className="text-[13px] text-muted-foreground">
-            Priority tip included
+            Low waits longer. High gets in sooner.
           </p>
           <div className="mt-4 flex flex-col gap-2">
             <Tier label="Low" value={data.suggested.low} />
@@ -181,9 +181,9 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
           <div className="grid min-w-[640px] grid-cols-[1.3fr_0.7fr_1.6fr_0.8fr_0.5fr] px-2 pb-2 text-xs text-muted-foreground">
             <span>Block</span>
             <span>Age</span>
-            <span>Gas used</span>
-            <span className="text-right">Base fee</span>
-            <span className="text-right">Txs</span>
+            <span>How full</span>
+            <span className="text-right">Price</span>
+            <span className="text-right">Payments</span>
           </div>
           {data.blocks.map((block) => {
             const percent = Math.round((block.gasUsed / block.gasLimit) * 100)
@@ -204,16 +204,7 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
                 <span className="flex items-center gap-2">
                   <span className="h-1.5 w-[120px] rounded-full bg-muted">
                     <span
-                      className={cn(
-                        'block h-1.5 rounded-full',
-                        FEE_BAR[
-                          usageLevel(percent) === 'calm'
-                            ? 'low'
-                            : usageLevel(percent) === 'steady'
-                              ? 'medium'
-                              : 'high'
-                        ],
-                      )}
+                      className="block h-1.5 rounded-full bg-foreground/70"
                       style={{ width: `${Math.min(100, percent)}%` }}
                     />
                   </span>
