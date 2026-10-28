@@ -139,6 +139,57 @@ describe('rpc failover', () => {
     expect(result.message).toBe('Could not reach Ethereum')
   })
 
+  test('an ENS name resolves to that address', async () => {
+    const subject = `0x${'ab'.repeat(20)}`
+    const wei = 10n ** 18n
+    globalThis.fetch = ((input, init) => {
+      const url = String(input)
+      if (url.includes('ensideas.com')) {
+        return Promise.resolve(
+          Response.json({
+            address: subject.toUpperCase(),
+            name: 'vitalik.eth',
+          }),
+        )
+      }
+      if (url.includes('routescan.io')) {
+        return Promise.resolve(
+          Response.json({ status: '1', message: 'OK', result: [] }),
+        )
+      }
+      const payload = JSON.parse(String(init?.body)) as { method: string }
+      const result =
+        payload.method === 'eth_getBalance'
+          ? `0x${wei.toString(16)}`
+          : payload.method === 'eth_getTransactionCount'
+            ? '0x1'
+            : payload.method === 'eth_getCode'
+              ? '0x'
+              : null
+      if (!result) throw new Error(`unexpected method ${payload.method}`)
+      return Promise.resolve(Response.json({ jsonrpc: '2.0', id: 1, result }))
+    }) as typeof fetch
+
+    const result = await loadAddress('vitalik.eth')
+    if (!result.ok) throw new Error(result.message)
+    expect(result.address).toBe(subject)
+    expect(result.balanceEth).toBe(formatEth(wei))
+  })
+
+  test('an unknown ENS name is a structured error', async () => {
+    globalThis.fetch = ((input) => {
+      if (!String(input).includes('ensideas.com'))
+        throw new Error('unexpected fetch')
+      return Promise.resolve(
+        Response.json({ address: null, name: 'missing.eth' }),
+      )
+    }) as typeof fetch
+    const result = await loadAddress('missing.eth')
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected a failure')
+    expect(result.message).toBe('No address for that name.')
+  })
+
   test('a bad address does not throw', async () => {
     const result = await loadAddress('nope')
     expect(result.ok).toBe(false)

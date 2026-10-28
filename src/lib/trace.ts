@@ -2,6 +2,7 @@ import { formatEth } from './format'
 
 export type SearchHit =
   | { ok: true; kind: 'address'; address: string }
+  | { ok: true; kind: 'ens'; name: string }
   | { ok: true; kind: 'tx'; hash: string }
   | { ok: true; kind: 'block'; blockId: string }
   | { ok: false; message: string }
@@ -9,10 +10,13 @@ export type SearchHit =
 const ADDRESS = /^0x[0-9a-f]{40}$/
 const HASH = /^0x[0-9a-f]{64}$/
 const BLOCK = /^\d{1,12}$/
-const BAD_QUERY = 'Enter an address, a transaction hash, or a block number.'
+// shortcut: ascii .eth labels only, widen this when a name needs unicode normalization
+const ENS = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+eth$/
+const BAD_QUERY =
+  'Enter an address, an ENS name, a transaction hash, or a block number.'
 
 export function classifyQuery(raw: string): SearchHit {
-  const query = raw.trim()
+  const query = raw.trim().replace(/\.+$/, '')
   if (!query) return { ok: false, message: BAD_QUERY }
   if (BLOCK.test(query)) return { ok: true, kind: 'block', blockId: query }
   const hex = query.toLowerCase()
@@ -20,6 +24,7 @@ export function classifyQuery(raw: string): SearchHit {
   if (ADDRESS.test(prefixed))
     return { ok: true, kind: 'address', address: prefixed }
   if (HASH.test(prefixed)) return { ok: true, kind: 'tx', hash: prefixed }
+  if (ENS.test(hex)) return { ok: true, kind: 'ens', name: hex }
   return { ok: false, message: BAD_QUERY }
 }
 

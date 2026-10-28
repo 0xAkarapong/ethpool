@@ -31,11 +31,20 @@ describe('search classification', () => {
     })
   })
 
+  test('an ENS name opens the address view', () => {
+    expect(classifyQuery(' Vitalik.ETH ')).toEqual({
+      ok: true,
+      kind: 'ens',
+      name: 'vitalik.eth',
+    })
+  })
+
   test('garbage is a structured error', () => {
     expect(() => classifyQuery('not an address')).not.toThrow()
     expect(classifyQuery('not an address')).toEqual({
       ok: false,
-      message: 'Enter an address, a transaction hash, or a block number.',
+      message:
+        'Enter an address, an ENS name, a transaction hash, or a block number.',
     })
   })
 })

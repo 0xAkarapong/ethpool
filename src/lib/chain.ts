@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { addressName, formatEth, formatWeiAsGwei } from './format'
 import {
+  classifyQuery,
   normalizeAddress,
   normalizeTransfers,
   type Hop,
@@ -160,8 +161,9 @@ export const getAddressView = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<AddressResult> => loadAddress(data))
 
 export async function loadAddress(address: string): Promise<AddressResult> {
-  const normalized = normalizeAddress(address)
-  if (!normalized) return fail(new Error('Invalid address'))
+  const subject = await resolveSubject(address)
+  if (!subject.ok) return fail(new Error(subject.message))
+  const normalized = subject.address
   try {
     const [{ host, results }, history] = await Promise.all([
       callFirst([
@@ -384,6 +386,37 @@ async function loadTx(hash: string): Promise<TxFlowResult> {
 // JSON-RPC cannot list an address's transfers. This public explorer API needs no key.
 const INDEXER =
   'https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api'
+
+// Public lookup so a search for vitalik.eth does not need an API key.
+const ENS_LOOKUP = 'https://api.ensideas.com/ens/resolve/'
+
+async function resolveSubject(
+  raw: string,
+): Promise<{ ok: true; address: string } | { ok: false; message: string }> {
+  const direct = normalizeAddress(raw)
+  if (direct) return { ok: true, address: direct }
+  const hit = classifyQuery(raw)
+  if (!hit.ok || hit.kind !== 'ens')
+    return { ok: false, message: 'Invalid address' }
+  try {
+    const response = await fetch(
+      `${ENS_LOOKUP}${encodeURIComponent(hit.name)}`,
+      {
+        signal: AbortSignal.timeout(ATTEMPT_MS),
+      },
+    )
+    const body: unknown = await response.json().catch(() => null)
+    const found =
+      isRecord(body) && typeof body.address === 'string'
+        ? normalizeAddress(body.address)
+        : null
+    if (!response.ok || !found)
+      return { ok: false, message: 'No address for that name.' }
+    return { ok: true, address: found }
+  } catch {
+    return { ok: false, message: 'Could not resolve that name.' }
+  }
+}
 
 async function loadTransfers(address: string): Promise<Array<Hop>> {
   const lists = await Promise.all([

@@ -211,10 +211,10 @@ function SearchForm() {
       return
     }
     setError(null)
-    if (hit.kind === 'address') {
+    if (hit.kind === 'address' || hit.kind === 'ens') {
       void navigate({
         to: '/address/$address',
-        params: { address: hit.address },
+        params: { address: hit.kind === 'ens' ? hit.name : hit.address },
       })
       return
     }
@@ -234,8 +234,8 @@ function SearchForm() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          aria-label="Search address, transaction, or block"
-          placeholder="Address, transaction, or block"
+          aria-label="Search address, ENS name, transaction, or block"
+          placeholder="Address, ENS, transaction, or block"
           className="w-full min-w-0 rounded-lg border bg-card px-3 py-2 text-sm"
         />
         <button
