@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { useAutoRefresh, useReportHost } from '@/components/shell'
+import { useAutoRefresh, useReportHost, useStickyOk } from '@/components/shell'
 import { TxFlow } from '@/components/tx-flow'
 import { getTxFlow } from '@/lib/chain'
 
@@ -12,9 +12,17 @@ export const Route = createFileRoute('/tx/$hash')({
 })
 
 function TxRoute() {
+  const { hash } = Route.useParams()
   const result = Route.useLoaderData()
   const router = useRouter()
+  const cached = useStickyOk(hash, result)
   useReportHost(result.ok ? result.host : undefined)
   useAutoRefresh()
-  return <TxFlow result={result} onRefresh={() => void router.invalidate()} />
+  return (
+    <TxFlow
+      result={result}
+      cached={cached}
+      onRefresh={() => void router.invalidate()}
+    />
+  )
 }

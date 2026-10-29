@@ -49,6 +49,33 @@ export function useAutoRefresh(ms = 20_000) {
   }, [router, ms])
 }
 
+type StickyOk<T extends { ok: true }> = { key: string; data: T | null }
+
+export function nextSticky<T extends { ok: true }>(
+  previous: StickyOk<T> | null,
+  key: string,
+  result: T | { ok: false },
+): StickyOk<T> {
+  if (!previous || previous.key !== key)
+    return { key, data: result.ok ? result : null }
+  if (result.ok) return { key, data: result }
+  return previous
+}
+
+export function useStickyOk<T extends { ok: true }>(
+  key: string,
+  result: T | { ok: false },
+): T | null {
+  const [state, setState] = useState(() => nextSticky(null, key, result))
+  if (state.key !== key) setState(nextSticky(null, key, result))
+
+  useEffect(() => {
+    if (result.ok) setState({ key, data: result })
+  }, [key, result])
+
+  return state.key === key ? state.data : result.ok ? result : null
+}
+
 const TrackContext = createContext<{
   tracked: Array<string>
   track: (address: string) => void

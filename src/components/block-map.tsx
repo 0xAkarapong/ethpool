@@ -19,13 +19,16 @@ const MAP_H = 620
 
 export function BlockMap({
   result,
+  cached = null,
   onRefresh,
 }: {
   result: BlockResult
+  cached?: Extract<BlockResult, { ok: true }> | null
   onRefresh: () => void
 }) {
+  const data = result.ok ? result : cached
   const [picked, setPicked] = useState<string | null>(null)
-  const txs = result.ok ? result.txs : []
+  const txs = data ? data.txs : []
   const selected = txs.find((tx) => tx.hash === picked) ?? largest(txs)
   const cells = treemap(
     txs.map((tx) => ({ ...tx, value: Math.max(tx.gas, 1) })),
@@ -40,12 +43,10 @@ export function BlockMap({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <PageHeader
-        title={
-          result.ok ? `Block ${formatNumber(result.block.number)}` : 'Block'
-        }
+        title={data ? `Block ${formatNumber(data.block.number)}` : 'Block'}
         subtitle={
-          result.ok
-            ? `Included ${formatUtcTime(result.block.timestamp * 1000)}. Each tile is one payment. Bigger means more gas. Color compares fees inside this block.`
+          data
+            ? `Included ${formatUtcTime(data.block.timestamp * 1000)}. Each tile is one payment. Bigger means more gas. Color compares fees inside this block.`
             : 'What was inside this batch'
         }
         updatedAt={result.updatedAt}
@@ -60,29 +61,26 @@ export function BlockMap({
       {result.ok ? null : (
         <ErrorBanner message={result.message} onRetry={onRefresh} />
       )}
-      {result.ok ? (
+      {data ? (
         <>
           <BlockChain
-            blocks={result.nearby}
-            active={result.block.number}
-            updatedAt={result.updatedAt}
+            blocks={data.nearby}
+            active={data.block.number}
+            updatedAt={data.updatedAt}
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="grid flex-1 gap-3 sm:grid-cols-3">
               <Stat
                 label="Base fee"
-                value={`${formatGwei(result.block.baseFeeGwei)} gwei`}
+                value={`${formatGwei(data.block.baseFeeGwei)} gwei`}
               />
-              <Stat label="How full" value={fullness(result.block)} />
-              <Stat
-                label="Payments"
-                value={formatNumber(result.block.txCount)}
-              />
+              <Stat label="How full" value={fullness(data.block)} />
+              <Stat label="Payments" value={formatNumber(data.block.txCount)} />
             </div>
             <div className="flex gap-2">
-              {result.block.number > 0 ? (
+              {data.block.number > 0 ? (
                 <Pager
-                  blockId={String(result.block.number - 1)}
+                  blockId={String(data.block.number - 1)}
                   label="Previous"
                 />
               ) : null}
@@ -91,7 +89,7 @@ export function BlockMap({
                   Latest
                 </span>
               ) : (
-                <Pager blockId={String(result.block.number + 1)} label="Next" />
+                <Pager blockId={String(data.block.number + 1)} label="Next" />
               )}
             </div>
           </div>
@@ -147,7 +145,7 @@ export function BlockMap({
               {selected ? (
                 <Detail
                   tx={selected}
-                  baseFee={result.block.baseFeeGwei}
+                  baseFee={data.block.baseFeeGwei}
                   tone={tone}
                 />
               ) : null}

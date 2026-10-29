@@ -6,9 +6,9 @@ import {
   followPath,
   mapGraph,
   packBubbles,
-  TransferSection,
   type TraceStep,
-} from './address-view'
+} from './address-graph'
+import { TransferSection } from './address-view'
 import type { Hop } from '@/lib/trace'
 
 describe('address transfer list', () => {

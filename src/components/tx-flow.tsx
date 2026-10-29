@@ -10,14 +10,17 @@ const ZERO_ADDRESS = `0x${'0'.repeat(40)}`
 
 export function TxFlow({
   result,
+  cached = null,
   onRefresh,
 }: {
   result: TxFlowResult
+  cached?: Extract<TxFlowResult, { ok: true }> | null
   onRefresh: () => void
 }) {
+  const data = result.ok ? result : cached
   const showsEther =
-    result.ok &&
-    [result.valueEth, result.burnedEth, result.tipEth].some(
+    !!data &&
+    [data.valueEth, data.burnedEth, data.tipEth].some(
       (amount) => Number(amount) > 0,
     )
   const [now, setNow] = useState(result.updatedAt)
@@ -29,7 +32,7 @@ export function TxFlow({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <PageHeader
         title="Transaction"
-        subtitle={result.ok ? shortAddress(result.hash) : 'Value and fee flow'}
+        subtitle={data ? shortAddress(data.hash) : 'Value and fee flow'}
         updatedAt={result.updatedAt}
         live={result.ok}
         problem={
@@ -42,57 +45,53 @@ export function TxFlow({
       {result.ok ? null : (
         <ErrorBanner message={result.message} onRetry={onRefresh} />
       )}
-      {result.ok ? (
+      {data ? (
         <>
           <p className="text-sm text-muted-foreground">
-            {result.blockNumber === null
-              ? 'Waiting to be included'
-              : 'Confirmed'}
-            {result.timestamp ? ` · ${formatAge(now, result.timestamp)}` : ''}
-            {result.blockNumber !== null ? (
+            {data.blockNumber === null ? 'Waiting to be included' : 'Confirmed'}
+            {data.timestamp ? ` · ${formatAge(now, data.timestamp)}` : ''}
+            {data.blockNumber !== null ? (
               <>
                 {' · '}
                 <Link
                   to="/block/$blockId"
-                  params={{ blockId: String(result.blockNumber) }}
+                  params={{ blockId: String(data.blockNumber) }}
                   className="text-foreground underline-offset-2 hover:underline"
                 >
-                  {`Block ${formatNumber(result.blockNumber)}`}
+                  {`Block ${formatNumber(data.blockNumber)}`}
                 </Link>
               </>
             ) : null}
           </p>
-          <TokenMoves tokens={result.tokens} more={result.tokenMore} />
+          <TokenMoves tokens={data.tokens} more={data.tokenMore} />
           {showsEther ? (
             <p className="text-sm text-muted-foreground">
               Ether leaves the sender. A thicker line is more ether.
             </p>
-          ) : result.tokens.length === 0 ? (
+          ) : data.tokens.length === 0 ? (
             <p className="text-sm text-muted-foreground">No ether moved.</p>
           ) : null}
           {showsEther ? (
             <Split
-              from={result.from}
-              to={result.to}
-              toName={result.toName}
-              totalEth={result.totalEth}
-              valueEth={result.valueEth}
-              burnedEth={result.burnedEth}
-              tipEth={result.tipEth}
+              from={data.from}
+              to={data.to}
+              toName={data.toName}
+              totalEth={data.totalEth}
+              valueEth={data.valueEth}
+              burnedEth={data.burnedEth}
+              tipEth={data.tipEth}
             />
           ) : null}
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat label="Gas used" value={formatNumber(result.gasUsed)} />
-            <Stat label="Price paid" value={`${result.effectiveGwei} gwei`} />
+            <Stat label="Gas used" value={formatNumber(data.gasUsed)} />
+            <Stat label="Price paid" value={`${data.effectiveGwei} gwei`} />
             <Stat
               label="Highest price allowed"
-              value={`${result.maxGwei} gwei`}
+              value={`${data.maxGwei} gwei`}
             />
-            <Stat label="Fee in ETH" value={`${result.feeEth} ETH`} />
+            <Stat label="Fee in ETH" value={`${data.feeEth} ETH`} />
           </section>
-          <p className="text-xs text-muted-foreground break-all">
-            {result.hash}
-          </p>
+          <p className="text-xs text-muted-foreground break-all">{data.hash}</p>
         </>
       ) : null}
     </div>

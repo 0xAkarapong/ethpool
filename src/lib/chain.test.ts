@@ -38,6 +38,28 @@ describe('rpc failover', () => {
     expect(result.blocks.length).toBeGreaterThan(0)
   })
 
+  test('the next overview asks only the host that just answered', async () => {
+    const seen: Array<string> = []
+    globalThis.fetch = ((input, init) => {
+      seen.push(new URL(String(input)).host)
+      const payload = JSON.parse(String(init?.body)) as { method: string }
+      return Promise.resolve(
+        Response.json({
+          jsonrpc: '2.0',
+          id: 1,
+          result: resultFor(payload.method),
+        }),
+      )
+    }) as typeof fetch
+
+    const first = await loadOverview()
+    if (!first.ok) throw new Error(first.message)
+    seen.length = 0
+    const second = await loadOverview()
+    if (!second.ok) throw new Error(second.message)
+    expect(new Set(seen)).toEqual(new Set([first.host]))
+  })
+
   test('loads balance, account type, and the next hop', async () => {
     const subject = `0x${'ab'.repeat(20)}`
     const counterparty = `0x${'ef'.repeat(20)}`
