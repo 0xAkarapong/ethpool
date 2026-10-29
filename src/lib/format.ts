@@ -47,6 +47,34 @@ export function formatNumber(value: number): string {
   return value.toLocaleString('en-US')
 }
 
+export function formatUtcStamp(sec: number): string {
+  const date = new Date(sec * 1000)
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
+  const hh = String(date.getUTCHours()).padStart(2, '0')
+  const mm = String(date.getUTCMinutes()).padStart(2, '0')
+  return `${date.getUTCDate()} ${months[date.getUTCMonth()]} ${hh}:${mm} UTC`
+}
+
+export function formatUtcClock(sec: number): string {
+  const date = new Date(sec * 1000)
+  const hh = String(date.getUTCHours()).padStart(2, '0')
+  const mm = String(date.getUTCMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
 export function formatUtcTime(ms: number): string {
   const date = new Date(ms)
   const hh = String(date.getUTCHours()).padStart(2, '0')

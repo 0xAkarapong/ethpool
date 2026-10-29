@@ -1,77 +1,132 @@
 export type TreemapRect = { x: number; y: number; w: number; h: number }
 
-function worst(areas: Array<number>, side: number): number {
-  let sum = 0
-  let max = 0
-  let min = Infinity
-  for (const area of areas) {
-    sum += area
-    if (area > max) max = area
-    if (area < min) min = area
+const GRID = 144
+// Repeated sizes, so the field has a rhythm instead of a pile of one-off rectangles.
+const STEPS = [1, 2, 3, 4, 5, 7, 9, 12, 16, 21, 28, 36, 48, 64, 84, 112]
+
+type Placed = { x: number; y: number; s: number }
+
+const FOCUS_X = GRID * 0.5
+const FOCUS_Y = GRID * 0.5
+
+function snap(side: number): number {
+  const capped = Math.min(side, GRID - 2)
+  if (capped <= 1) return 1
+  let best = 1
+  let bestDist = Infinity
+  for (const step of STEPS) {
+    const dist = Math.abs(step - capped)
+    if (dist < bestDist) {
+      best = step
+      bestDist = dist
+    }
   }
-  const sum2 = sum * sum
-  const side2 = side * side
-  return Math.max((side2 * max) / sum2, sum2 / (side2 * min))
+  return best
 }
 
+function fits(occ: Uint8Array, x: number, y: number, side: number): boolean {
+  if (x < 0 || y < 0 || x + side > GRID || y + side > GRID) return false
+  for (let dy = 0; dy < side; dy++) {
+    const row = (y + dy) * GRID + x
+    for (let dx = 0; dx < side; dx++) {
+      if (occ[row + dx]) return false
+    }
+  }
+  return true
+}
+
+function mark(occ: Uint8Array, x: number, y: number, side: number) {
+  for (let dy = 0; dy < side; dy++) {
+    const row = (y + dy) * GRID + x
+    for (let dx = 0; dx < side; dx++) occ[row + dx] = 1
+  }
+}
+
+// Largest squares claim the focal point. Smaller ones settle in the nearest opening.
+function pack(sides: Array<number>): Array<Placed> | null {
+  const occ = new Uint8Array(GRID * GRID)
+  const placed: Array<Placed> = []
+  for (const side of sides) {
+    const originX = Math.round(FOCUS_X - side / 2)
+    const originY = Math.round(FOCUS_Y - side / 2)
+    const found: { spot: Placed | null; closest: number } = {
+      spot: null,
+      closest: Infinity,
+    }
+    const consider = (x: number, y: number) => {
+      if (!fits(occ, x, y, side)) return
+      const dx = x + side / 2 - FOCUS_X
+      const dy = y + side / 2 - FOCUS_Y
+      const distance = dx * dx + dy * dy
+      if (distance < found.closest) {
+        found.closest = distance
+        found.spot = { x, y, s: side }
+      }
+    }
+    for (let ring = 0; ring < GRID && found.spot === null; ring++) {
+      const top = originY - ring
+      const bottom = originY + ring
+      const left = originX - ring
+      const right = originX + ring
+      for (let x = left; x <= right; x++) {
+        consider(x, top)
+        if (ring > 0) consider(x, bottom)
+      }
+      for (let y = top + 1; y <= bottom - 1; y++) {
+        consider(left, y)
+        consider(right, y)
+      }
+    }
+    if (found.spot === null) return null
+    mark(occ, found.spot.x, found.spot.y, found.spot.s)
+    placed.push(found.spot)
+  }
+  return placed
+}
+
+// Squares grow out from the middle of the block.
+// `capacity` is the whole block. A block that did not fill keeps a quiet margin.
 export function treemap<T extends { value: number }>(
   items: Array<T>,
   width: number,
   height: number,
+  capacity?: number,
 ): Array<T & TreemapRect> {
-  const total = items.reduce((sum, item) => sum + Math.max(0, item.value), 0)
-  if (total <= 0 || width <= 0 || height <= 0) {
+  const live = items.filter((item) => item.value > 0)
+  if (live.length === 0 || width <= 0 || height <= 0) {
     return items.map((item) => ({ ...item, x: 0, y: 0, w: 0, h: 0 }))
   }
+  const total = live.reduce((sum, item) => sum + item.value, 0)
+  const room = capacity && capacity > 0 ? capacity : total
+  const fraction = Math.min(1, total / room)
+  const ordered = [...live].sort((a, b) => b.value - a.value)
 
-  const nodes = items
-    .map((item) => ({
-      item,
-      area: (Math.max(0, item.value) / total) * width * height,
-    }))
-    .filter((node) => node.area > 0)
-    .sort((a, b) => b.area - a.area)
-
-  const placed: Array<T & TreemapRect> = []
-  let x = 0
-  let y = 0
-  let w = width
-  let h = height
-  let index = 0
-
-  while (index < nodes.length) {
-    const vertical = w <= h
-    const side = vertical ? h : w
-    const row = [nodes[index]]
-    index += 1
-    while (index < nodes.length) {
-      const current = row.map((node) => node.area)
-      const candidate = [...current, nodes[index].area]
-      if (worst(current, side) < worst(candidate, side)) break
-      row.push(nodes[index])
-      index += 1
-    }
-
-    const sum = row.reduce((area, node) => area + node.area, 0)
-    const thickness = sum / side
-    let offset = 0
-    for (const node of row) {
-      const extent = node.area / thickness
-      placed.push(
-        vertical
-          ? { ...node.item, x, y: y + offset, w: thickness, h: extent }
-          : { ...node.item, x: x + offset, y, w: extent, h: thickness },
-      )
-      offset += extent
-    }
-    if (vertical) {
-      x += thickness
-      w -= thickness
-    } else {
-      y += thickness
-      h -= thickness
-    }
+  let budget = fraction * GRID * GRID * 0.98
+  let placed: Array<Placed> | null = null
+  for (let attempt = 0; attempt < 20 && placed === null; attempt++) {
+    const sides = ordered.map((item) =>
+      snap(Math.sqrt((item.value / total) * budget)),
+    )
+    placed = pack(sides)
+    budget *= 0.86
   }
-
-  return placed
+  if (placed === null) {
+    placed =
+      pack(ordered.map(() => 1)) ?? ordered.map(() => ({ x: 0, y: 0, s: 1 }))
+  }
+  const settled = placed
+  const span = Math.min(width, height)
+  const originX = (width - span) / 2
+  const originY = (height - span) / 2
+  return ordered.map((item, index) => {
+    const tile = settled[index]
+    const side = (tile.s / GRID) * span
+    return {
+      ...item,
+      x: originX + (tile.x / GRID) * span,
+      y: originY + (tile.y / GRID) * span,
+      w: side,
+      h: side,
+    }
+  })
 }

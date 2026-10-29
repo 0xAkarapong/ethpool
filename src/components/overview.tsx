@@ -1,33 +1,12 @@
 import { useEffect, useState } from 'react'
 import type { OverviewData, OverviewResult } from '@/lib/chain'
-import {
-  axisMax,
-  feeLevel,
-  formatAge,
-  formatGwei,
-  formatNumber,
-} from '@/lib/format'
-import { cn } from '@/lib/utils'
+import type { FeeTone } from '@/lib/format'
+import { feeHeat, formatAge, formatGwei, formatNumber } from '@/lib/format'
 import { BlockChain } from './block-chain'
+import { FeeChart } from './overview-chart'
 import { ErrorBanner, PageHeader } from './shell'
 
-const FEE_TEXT = {
-  low: 'text-fee-low',
-  medium: 'text-fee-mid',
-  high: 'text-fee-high',
-} as const
-
-const FEE_BAR = {
-  low: 'bg-fee-low-bar',
-  medium: 'bg-fee-mid-bar',
-  high: 'bg-fee-high-bar',
-} as const
-
-const TIER_BG = {
-  low: 'border-fee-low-bar/50 bg-fee-low-bg text-fee-low',
-  medium: 'border-fee-mid-bar/60 bg-fee-mid-bg text-fee-mid',
-  high: 'border-fee-high-bar/50 bg-fee-high-bg text-fee-high',
-} as const
+export { barIndex } from './overview-chart'
 
 export function Overview({
   result,
@@ -74,9 +53,16 @@ export function Overview({
 }
 
 function Dashboard({ data, now }: { data: OverviewData; now: number }) {
-  const baseLevel = feeLevel(data.baseFeeGwei)
-  const mediumLevel = feeLevel(data.suggested.medium)
-  const max = axisMax(data.history)
+  const historyTone = feeHeat(data.history.map((point) => point.gwei))
+  const offerTone = feeHeat([
+    data.suggested.low,
+    data.suggested.medium,
+    data.suggested.high,
+  ])
+  const full =
+    data.latest.gasLimit > 0
+      ? Math.round((data.latest.gasUsed / data.latest.gasLimit) * 100)
+      : 0
 
   return (
     <>
@@ -86,14 +72,14 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
           value={formatGwei(data.baseFeeGwei)}
           unit="gwei"
           caption="What the next batch charges"
-          tone={FEE_TEXT[baseLevel]}
+          color={historyTone(data.baseFeeGwei).color}
         />
         <Metric
           label="A fair offer"
           value={formatGwei(data.suggested.medium)}
           unit="gwei"
           caption="Enough for a normal payment"
-          tone={FEE_TEXT[mediumLevel]}
+          color={offerTone(data.suggested.medium).color}
         />
         <Metric
           label="Latest block"
@@ -101,62 +87,18 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
           caption={formatAge(now, data.latest.timestamp)}
         />
         <Metric
-          label="Pending"
-          value={data.pending === null ? '—' : formatNumber(data.pending)}
-          unit={data.pending === null ? undefined : 'payments'}
-          caption={
-            data.pending === null
-              ? 'This RPC does not publish the mempool size'
-              : `${formatNumber(data.latest.txCount)} confirmed in the latest block`
-          }
+          label="How full"
+          value={`${full}%`}
+          caption={`${formatNumber(data.latest.txCount)} payments in the latest block`}
         />
       </section>
 
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="rounded-[10px] border bg-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-medium">Price to get in</h2>
-              <p className="text-[13px] text-muted-foreground">
-                Each bar is one batch of payments, oldest to newest. A taller
-                bar means people paid more to be included.
-              </p>
-            </div>
-            <span
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs font-medium',
-                TIER_BG[baseLevel],
-              )}
-            >
-              Now {formatGwei(data.baseFeeGwei)} gwei
-            </span>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <div className="flex h-40 flex-col justify-between text-[11px] text-muted-foreground">
-              <span>{formatAxis(max)}</span>
-              <span>{formatAxis(max / 2)}</span>
-              <span>0</span>
-            </div>
-            <div className="flex h-40 flex-1 items-end gap-[3px]">
-              {data.history.map((value, index) => (
-                <div
-                  key={`${data.latest.number}-${index}`}
-                  title={`${formatGwei(value)} gwei`}
-                  className={cn(
-                    'min-w-0 flex-1 rounded-[3px]',
-                    FEE_BAR[feeLevel(value)],
-                  )}
-                  style={{ height: `${Math.max(2, (value / max) * 160)}px` }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-            <Legend swatch="bg-fee-low-bar" label="Under 17 gwei" />
-            <Legend swatch="bg-fee-mid-bar" label="17–22 gwei" />
-            <Legend swatch="bg-fee-high-bar" label="Over 22 gwei" />
-          </div>
-        </div>
+        <FeeChart
+          history={data.history}
+          latestNumber={data.latest.number}
+          baseFeeGwei={data.baseFeeGwei}
+        />
 
         <div
           id="fees"
@@ -167,9 +109,21 @@ function Dashboard({ data, now }: { data: OverviewData; now: number }) {
             Low waits longer. High gets in sooner.
           </p>
           <div className="mt-4 flex flex-col gap-2">
-            <Tier label="Low" value={data.suggested.low} />
-            <Tier label="Medium" value={data.suggested.medium} />
-            <Tier label="High" value={data.suggested.high} />
+            <Tier
+              label="Low"
+              value={data.suggested.low}
+              tone={offerTone(data.suggested.low)}
+            />
+            <Tier
+              label="Medium"
+              value={data.suggested.medium}
+              tone={offerTone(data.suggested.medium)}
+            />
+            <Tier
+              label="High"
+              value={data.suggested.high}
+              tone={offerTone(data.suggested.high)}
+            />
           </div>
         </div>
       </section>
@@ -197,19 +151,19 @@ function Metric({
   value,
   unit,
   caption,
-  tone = 'text-foreground',
+  color,
 }: {
   label: string
   value: string
   unit?: string
   caption: string
-  tone?: string
+  color?: string
 }) {
   return (
     <div className="rounded-[10px] border bg-card p-5">
       <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 flex items-end gap-1.5">
-        <span className={cn('font-heading text-3xl font-medium', tone)}>
+        <span className="font-heading text-3xl font-medium" style={{ color }}>
           {value}
         </span>
         {unit ? (
@@ -221,30 +175,26 @@ function Metric({
   )
 }
 
-function Tier({ label, value }: { label: string; value: number }) {
-  const level = feeLevel(value)
+function Tier({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone: FeeTone
+}) {
   return (
     <div
-      className={cn(
-        'flex items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium',
-        TIER_BG[level],
-      )}
+      className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm font-medium"
+      style={{
+        background: tone.color,
+        color: tone.ink,
+        borderColor: tone.color,
+      }}
     >
       <span>{label}</span>
       <span>{formatGwei(value)} gwei</span>
     </div>
   )
-}
-
-function Legend({ swatch, label }: { swatch: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={cn('size-2 rounded-sm', swatch)} />
-      {label}
-    </span>
-  )
-}
-
-function formatAxis(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }

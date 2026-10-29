@@ -1,12 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import type { CallView } from '@/lib/call'
 import type { TxFlowResult } from '@/lib/chain'
-import type { TokenMove } from '@/lib/tokens'
 import { formatAge, formatNumber, shortAddress } from '@/lib/format'
-import { cn } from '@/lib/utils'
 import { ErrorBanner, PageHeader } from './shell'
+import { TokenMoves } from './tx-moves'
+import { Split } from './tx-ribbons'
 
-const ZERO_ADDRESS = `0x${'0'.repeat(40)}`
+export { splitRibbons } from './tx-ribbons'
 
 export function TxFlow({
   result,
@@ -63,12 +64,21 @@ export function TxFlow({
               </>
             ) : null}
           </p>
+          {data.call.kind === 'transfer' ? null : (
+            <Execution
+              call={data.call}
+              succeeded={data.succeeded}
+              from={data.from}
+              to={data.to}
+              toName={data.toName}
+            />
+          )}
           <TokenMoves tokens={data.tokens} more={data.tokenMore} />
           {showsEther ? (
             <p className="text-sm text-muted-foreground">
               Ether leaves the sender. A thicker line is more ether.
             </p>
-          ) : data.tokens.length === 0 ? (
+          ) : data.call.kind === 'transfer' && data.tokens.length === 0 ? (
             <p className="text-sm text-muted-foreground">No ether moved.</p>
           ) : null}
           {showsEther ? (
@@ -98,279 +108,60 @@ export function TxFlow({
   )
 }
 
-const FLOW_W = 880
-const FLOW_H = 240
-const FLOW_TOP = 36
-const FLOW_TRACK = 168
-
-export type RibbonPart = {
-  key: 'value' | 'burn' | 'tip'
-  amount: number
-  title: string
-  caption: string
-  eth: string
-  stroke: string
-}
-
-/** Ribbon thickness follows the square root of the ether, so a fee stays visible beside a large payment. */
-export function splitRibbons<T extends { amount: number }>(
-  parts: Array<T>,
-  top = FLOW_TOP,
-  height = FLOW_TRACK,
-): Array<T & { y: number; h: number }> {
-  const live = parts.filter((part) => part.amount > 0)
-  if (live.length === 0) return []
-  const gap = 20
-  const weights = live.map((part) => Math.sqrt(part.amount))
-  const sum = weights.reduce((total, weight) => total + weight, 0)
-  const room = Math.max(0, height - gap * (live.length - 1))
-  let y = top
-  return live.map((part, index) => {
-    const h = ((weights[index] ?? 0) / sum) * room
-    const ribbon = { ...part, y, h }
-    y += h + gap
-    return ribbon
-  })
-}
-
-function Split({
+function Execution({
+  call,
+  succeeded,
   from,
   to,
   toName,
-  totalEth,
-  valueEth,
-  burnedEth,
-  tipEth,
 }: {
+  call: Exclude<CallView, { kind: 'transfer' }>
+  succeeded: boolean | null
   from: string
   to: string | null
   toName: string | null
-  totalEth: string
-  valueEth: string
-  burnedEth: string
-  tipEth: string
 }) {
-  const ribbons = splitRibbons([
-    {
-      key: 'value' as const,
-      amount: Number(valueEth),
-      title: to ? (toName ?? shortAddress(to)) : 'A new program',
-      caption: 'Arrived',
-      eth: valueEth,
-      stroke: 'var(--flow-value)',
-    },
-    {
-      key: 'burn' as const,
-      amount: Number(burnedEth),
-      title: 'Destroyed',
-      caption: 'Burned',
-      eth: burnedEth,
-      stroke: 'var(--flow-burn)',
-    },
-    {
-      key: 'tip' as const,
-      amount: Number(tipEth),
-      title: 'Block producer',
-      caption: 'Tip',
-      eth: tipEth,
-      stroke: 'var(--flow-tip)',
-    },
-  ])
-  const first = ribbons[0]
-  const last = ribbons[ribbons.length - 1]
-  const sourceY = first && last ? (first.y + last.y + last.h) / 2 : FLOW_H / 2
-
-  if (ribbons.length === 0) {
-    return <p className="text-sm text-muted-foreground">No ether moved.</p>
-  }
-
-  return (
-    <div className="relative aspect-[880/240] w-full overflow-hidden rounded-[10px] border bg-background">
-      <svg
-        viewBox={`0 0 ${FLOW_W} ${FLOW_H}`}
-        className="pointer-events-none absolute inset-0 h-full w-full"
-      >
-        {ribbons.map((ribbon) => {
-          const y2 = ribbon.y + ribbon.h / 2
-          const d = `M 156 ${sourceY} C 340 ${sourceY}, 540 ${y2}, 724 ${y2}`
-          return (
-            <g key={ribbon.key}>
-              <path
-                d={d}
-                fill="none"
-                stroke={ribbon.stroke}
-                strokeWidth={Math.min(42, Math.max(10, ribbon.h * 0.85))}
-                strokeOpacity="0.4"
-                strokeLinecap="round"
-              />
-              <path
-                d={d}
-                fill="none"
-                stroke={ribbon.stroke}
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                className="ether-line"
-              />
-            </g>
-          )
-        })}
-      </svg>
-      <End
-        x={108}
-        y={sourceY}
-        href={{ to: '/address/$address', address: from }}
-        title={shortAddress(from)}
-        caption="Sent"
-        amount={`${totalEth} ETH`}
-        stroke="var(--foreground)"
-      />
-      {ribbons.map((ribbon) => (
-        <End
-          key={ribbon.key}
-          x={760}
-          y={ribbon.y + ribbon.h / 2}
-          href={
-            ribbon.key === 'value' && to
-              ? { to: '/address/$address', address: to }
-              : null
-          }
-          title={ribbon.title}
-          caption={ribbon.caption}
-          amount={`${ribbon.eth} ETH`}
-          stroke={ribbon.stroke}
-        />
-      ))}
-    </div>
-  )
-}
-
-function End({
-  x,
-  y,
-  href,
-  title,
-  caption,
-  amount,
-  stroke,
-}: {
-  x: number
-  y: number
-  href: { to: '/address/$address'; address: string } | null
-  title: string
-  caption: string
-  amount: string
-  stroke: string
-}) {
-  const body = (
-    <span className="flex flex-col items-center text-center">
-      <span
-        className="flex size-14 flex-col items-center justify-center rounded-full border-2 text-white"
-        style={{
-          borderColor: stroke,
-          background: `color-mix(in srgb, ${stroke} 58%, transparent)`,
-          boxShadow: `0 0 18px color-mix(in srgb, ${stroke} 45%, transparent)`,
-        }}
-      >
-        <span className="font-heading text-[11px] font-medium">{caption}</span>
-      </span>
-      <span className="mt-1 max-w-28 truncate text-xs font-medium">
-        {title}
-      </span>
-      <span className="font-heading text-xs">{amount}</span>
-    </span>
-  )
-  return (
-    <div
-      className="absolute -translate-x-1/2 -translate-y-7"
-      style={{
-        left: `${((x / FLOW_W) * 100).toFixed(2)}%`,
-        top: `${((y / FLOW_H) * 100).toFixed(2)}%`,
-      }}
-    >
-      {href ? (
-        <Link
-          to={href.to}
-          params={{ address: href.address }}
-          aria-label={`${caption} ${title}`}
-          className="rounded-full"
-        >
-          {body}
-        </Link>
-      ) : (
-        body
-      )}
-    </div>
-  )
-}
-
-function TokenMoves({
-  tokens,
-  more,
-}: {
-  tokens: Array<TokenMove>
-  more: number
-}) {
-  if (tokens.length === 0) return null
   return (
     <section className="rounded-[10px] border bg-card p-4">
-      <p className="text-sm text-muted-foreground">
-        Each row is one token moving between two accounts.
-      </p>
-      <ul className="mt-3 flex flex-col gap-2">
-        {tokens.map((move, index) => (
-          <li
-            key={`${move.token}-${move.from}-${move.to}-${index}`}
-            className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-background px-3 py-2"
-          >
-            <Account address={move.from} empty="Minted" />
+      {succeeded === null ? null : (
+        <p className="text-sm font-medium">
+          {succeeded ? 'This ran.' : 'This did not go through.'}
+        </p>
+      )}
+      <p className="mt-1 text-sm text-muted-foreground">
+        {call.kind === 'create' ? (
+          'A new program was created.'
+        ) : (
+          <>
             <Link
               to="/address/$address"
-              params={{ address: move.token }}
-              className="text-center underline-offset-2 hover:underline"
+              params={{ address: from }}
+              className="text-foreground underline-offset-2 hover:underline"
             >
-              <span className="font-heading text-sm font-medium">
-                {move.amount}
-              </span>
-              <span className="ml-1 text-xs text-muted-foreground">
-                {move.symbol}
-              </span>
+              {shortAddress(from)}
             </Link>
-            <Account address={move.to} empty="Burned" align="end" />
-          </li>
-        ))}
-      </ul>
-      {more > 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {`${more} more token transfers are in this payment.`}
+            {' asked '}
+            {to ? (
+              <Link
+                to="/address/$address"
+                params={{ address: to }}
+                className="text-foreground underline-offset-2 hover:underline"
+              >
+                {toName ?? shortAddress(to)}
+              </Link>
+            ) : (
+              'a program'
+            )}
+            {` to ${call.name}.`}
+          </>
+        )}
+      </p>
+      {call.kind === 'call' && !call.known ? (
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
+          {call.selector}
         </p>
       ) : null}
     </section>
-  )
-}
-
-function Account({
-  address,
-  empty,
-  align,
-}: {
-  address: string
-  empty: string
-  align?: 'end'
-}) {
-  const className = cn('truncate text-sm', align === 'end' && 'text-right')
-  if (address === ZERO_ADDRESS) {
-    return (
-      <span className={cn(className, 'text-muted-foreground')}>{empty}</span>
-    )
-  }
-  return (
-    <Link
-      to="/address/$address"
-      params={{ address }}
-      className={cn(className, 'underline-offset-2 hover:underline')}
-    >
-      {shortAddress(address)}
-    </Link>
   )
 }
 

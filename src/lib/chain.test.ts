@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { loadAddress, loadOverview } from './chain'
+import { feePoints, loadAddress, loadOverview } from './chain'
 import { formatEth } from './format'
 
 const realFetch = globalThis.fetch
+
+describe('fee chart times', () => {
+  test('uses a known block time and steps back by the gap between blocks', () => {
+    const points = feePoints([1, 2, 3], 98, [
+      { number: 100, timestamp: 1_000 },
+      { number: 99, timestamp: 988 },
+    ])
+    expect(points.map((point) => point.time)).toEqual([976, 988, 1_000])
+  })
+})
 
 describe('rpc failover', () => {
   afterEach(() => {

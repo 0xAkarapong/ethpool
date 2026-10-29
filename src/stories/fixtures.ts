@@ -49,7 +49,10 @@ export const overview: OverviewData = {
   suggested: { low: 16.2, medium: 20.8, high: 28.4 },
   latest: block(0),
   pending: 4820,
-  history: shape.map((value) => (value / shape[39]) * 18.42),
+  history: shape.map((value, index) => ({
+    gwei: (value / shape[39]) * 18.42,
+    time: updatedAt / 1000 - (shape.length - 1 - index) * 12,
+  })),
   blocks: rows.map((_, index) => block(index)),
 }
 
@@ -129,6 +132,13 @@ export const txFlow: TxFlowResult = {
   maxGwei: '48.00',
   priorityGwei: '24.20',
   kind: 'EIP-1559',
+  call: {
+    kind: 'call',
+    name: 'run a swap',
+    selector: '0x3593564c',
+    known: true,
+  },
+  succeeded: true,
   tokens: [
     {
       token: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',

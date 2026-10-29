@@ -49,6 +49,11 @@ describe('block heat', () => {
     expect(tone(0.07).color).not.toBe(tone(2.1).color)
   })
 
+  test('separates a quiet low offer from a quiet high offer', () => {
+    const tone = feeHeat([0.05, 0.08, 0.2])
+    expect(tone(0.05).color).not.toBe(tone(0.2).color)
+  })
+
   test('stays one color when the block barely moves', () => {
     const tone = feeHeat([0.07, 0.071, 0.072])
     expect(tone(0.07).color).toBe(tone(0.072).color)
