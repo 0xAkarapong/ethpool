@@ -2,10 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
-  bubbleRadius,
   followPath,
-  mapGraph,
-  packBubbles,
+  ribbonHeights,
+  walletRibbons,
   type TraceStep,
 } from './address-graph'
 import { TransferSection } from './address-view'
@@ -68,48 +67,43 @@ describe('follow the ether', () => {
     expect(path).toHaveLength(6)
   })
 
-  test('a bigger payment draws a bigger bubble', () => {
-    expect(bubbleRadius(2, 2)).toBeGreaterThan(bubbleRadius(2 / 1e6, 2))
+  test('a bigger payment draws a thicker bar', () => {
+    const [large, small] = ribbonHeights([2, 2 / 1e6])
+    expect(large).toBeGreaterThan(small ?? 0)
   })
 
-  test('one wallet is one bubble, tied to the address you opened', () => {
+  test('repeated payments to one wallet are one bar', () => {
     const wallet = '0x' + 'b'.repeat(40)
-    const opened = step('0x' + 'a'.repeat(40))
-    opened.hops = [
+    const columns = walletRibbons([
       hop(wallet, '0.2'),
       hop(wallet, '0.1', '0x' + 'cd'.repeat(32)),
-    ]
-    const graph = mapGraph([opened])
-    expect(graph.nodes.filter((node) => node.address === wallet)).toHaveLength(
-      1,
-    )
-    expect(graph.links).toEqual([
-      { a: opened.address, b: wallet, direction: 'in' },
+      hop(wallet, '0.05', '0x' + 'ef'.repeat(32), 'out'),
+    ])
+    expect(columns.incoming).toHaveLength(1)
+    expect(columns.incoming[0]?.hash).toBe('0x' + 'ab'.repeat(32))
+    expect(columns.incoming[0]?.label).toBe('0.3')
+    expect(columns.outgoing).toEqual([
+      expect.objectContaining({ address: wallet, direction: 'out' }),
     ])
   })
 
-  test('packed bubbles do not cover each other', () => {
-    const items = [
-      { id: 'center', r: 70 },
-      ...Array.from({ length: 8 }, (_, index) => ({ id: `n${index}`, r: 28 })),
-    ]
-    const links = items.slice(1).map((node) => ({ a: 'center', b: node.id }))
-    const placed = packBubbles(items, links)
-    for (let i = 0; i < placed.length; i++) {
-      for (let j = i + 1; j < placed.length; j++) {
-        const a = placed[i]
-        const b = placed[j]
-        const left = items.find((node) => node.id === a?.id)
-        const right = items.find((node) => node.id === b?.id)
-        const dist = Math.hypot(
-          (a?.x ?? 0) - (b?.x ?? 0),
-          (a?.y ?? 0) - (b?.y ?? 0),
-        )
-        expect(dist).toBeGreaterThanOrEqual(
-          (left?.r ?? 0) + (right?.r ?? 0) - 1,
-        )
-      }
-    }
+  test('the board shows the amount and which way the ether moved', () => {
+    const wallet = '0x' + 'b'.repeat(40)
+    const html = renderToStaticMarkup(
+      createElement(TransferSection, {
+        address: '0x' + 'a'.repeat(40),
+        historyMessage: null,
+        transfers: [hop(wallet, '1.2'), hop(wallet, '0.4', undefined, 'out')],
+        onRetry: () => {},
+        balance: '2 ETH',
+      }),
+    )
+    expect(html).toContain('Money in')
+    expect(html).toContain('Money out')
+    expect(html).toContain('1.2 ETH')
+    expect(html).toContain('0.4 ETH')
+    expect(html).toContain('2 ETH')
+    expect(html).not.toContain('bubble')
   })
 })
 
@@ -117,10 +111,11 @@ function hop(
   counterparty: string,
   amountEth: string,
   hash = '0x' + 'ab'.repeat(32),
+  direction: Hop['direction'] = 'in',
 ): Hop {
   return {
     hash,
-    direction: 'in',
+    direction,
     counterparty,
     amountEth,
     addressTo: `/address/${counterparty}`,

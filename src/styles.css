@@ -164,39 +164,10 @@ body {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@keyframes bubble-pop {
-  from {
-    transform: scale(0.15);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes bubble-glow {
-  50% {
-    filter: brightness(1.22);
-  }
-}
-
 @keyframes ether-flow {
   to {
     stroke-dashoffset: -28;
   }
-}
-
-.bubble-live {
-  animation:
-    bubble-pop 0.7s cubic-bezier(0.2, 0.85, 0.2, 1) backwards,
-    bubble-glow 3s ease-in-out 0.7s infinite;
-  transition: transform 0.2s ease;
-}
-
-.bubble-live:hover {
-  transform: scale(1.08);
-  z-index: 2;
 }
 
 .ether-line {
@@ -205,7 +176,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bubble-live,
   .ether-line {
     animation: none;
   }
