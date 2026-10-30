@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SupplyRouteImport } from './routes/supply'
 import { Route as TraceRouteImport } from './routes/trace'
 import { Route as AddressAddressRouteImport } from './routes/address.$address'
 import { Route as BlockBlockIdRouteImport } from './routes/block.$blockId'
@@ -18,6 +19,11 @@ import { Route as TxHashRouteImport } from './routes/tx.$hash'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupplyRoute = SupplyRouteImport.update({
+  id: '/supply',
+  path: '/supply',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TraceRoute = TraceRouteImport.update({
@@ -43,6 +49,7 @@ const TxHashRoute = TxHashRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/supply': typeof SupplyRoute
   '/trace': typeof TraceRoute
   '/address/$address': typeof AddressAddressRoute
   '/block/$blockId': typeof BlockBlockIdRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/supply': typeof SupplyRoute
   '/trace': typeof TraceRoute
   '/address/$address': typeof AddressAddressRoute
   '/block/$blockId': typeof BlockBlockIdRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/supply': typeof SupplyRoute
   '/trace': typeof TraceRoute
   '/address/$address': typeof AddressAddressRoute
   '/block/$blockId': typeof BlockBlockIdRoute
@@ -66,12 +75,24 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/trace' | '/address/$address' | '/block/$blockId' | '/tx/$hash'
+    | '/'
+    | '/supply'
+    | '/trace'
+    | '/address/$address'
+    | '/block/$blockId'
+    | '/tx/$hash'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/trace' | '/address/$address' | '/block/$blockId' | '/tx/$hash'
+  to:
+    | '/'
+    | '/supply'
+    | '/trace'
+    | '/address/$address'
+    | '/block/$blockId'
+    | '/tx/$hash'
   id:
     | '__root__'
     | '/'
+    | '/supply'
     | '/trace'
     | '/address/$address'
     | '/block/$blockId'
@@ -80,6 +101,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SupplyRoute: typeof SupplyRoute
   TraceRoute: typeof TraceRoute
   AddressAddressRoute: typeof AddressAddressRoute
   BlockBlockIdRoute: typeof BlockBlockIdRoute
@@ -93,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supply': {
+      id: '/supply'
+      path: '/supply'
+      fullPath: '/supply'
+      preLoaderRoute: typeof SupplyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/trace': {
@@ -128,6 +157,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SupplyRoute: SupplyRoute,
   TraceRoute: TraceRoute,
   AddressAddressRoute: AddressAddressRoute,
   BlockBlockIdRoute: BlockBlockIdRoute,

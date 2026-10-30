@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { Cube, House, MagnifyingGlass } from '@phosphor-icons/react'
+import { ChartLine, Cube, House, MagnifyingGlass } from '@phosphor-icons/react'
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { shortAddress } from '@/lib/format'
@@ -52,6 +52,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               label="Overview"
             />
             <NavLink
+              to="/supply"
+              active={path === '/supply'}
+              icon={ChartLine}
+              label="Supply"
+            />
+            <NavLink
               to="/block/$blockId"
               params={{ blockId: 'latest' }}
               active={path.startsWith('/block')}
@@ -94,6 +100,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <nav className="flex gap-1 overflow-x-auto text-sm">
                 <Link to="/" className="rounded-lg px-2 py-1">
                   Overview
+                </Link>
+                <Link to="/supply" className="rounded-lg px-2 py-1">
+                  Supply
                 </Link>
                 <Link
                   to="/block/$blockId"
@@ -200,7 +209,13 @@ function NavLink({
   active: boolean
   icon: typeof House
   label: string
-  to: '/' | '/block/$blockId' | '/tx/$hash' | '/address/$address' | '/trace'
+  to:
+    | '/'
+    | '/supply'
+    | '/block/$blockId'
+    | '/tx/$hash'
+    | '/address/$address'
+    | '/trace'
   params?: { blockId: string } | { hash: string } | { address: string }
   hash?: string
 }) {
